@@ -539,6 +539,7 @@
         const API_KEY = 'demo'; // Use your TwelveData API key
         const DEFAULT_PAIRS = ['EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'XAUUSD', 'NZDUSD'];
         let selectedPair = null;
+        const analysisCache = {}; // { 'PAIR_interval': { analysis, confluence, timestamp } }
         let selectedInterval = '1h';
 
         function closeAnalysisPanel() {
@@ -581,7 +582,7 @@
             await analyzePair(pair);
         }
 
-        async function analyzePair(customPair = null) {
+        async function analyzePair(customPair = null, forceRefresh = false) {
             const rawPair = customPair || document.getElementById('customPair')?.value || selectedPair;
             const pair = rawPair ? rawPair.trim().toUpperCase().replace(/[^A-Z]/g, '') : null;
             if (!pair) return alert('Select or enter a pair');
@@ -594,6 +595,16 @@
             }
 
             const panel = document.getElementById('analysisPanel');
+
+            // Check cache first (5 min validity) unless user explicitly hit Refresh
+            const cacheKey = `${pair}_${selectedInterval}`;
+            const cached = analysisCache[cacheKey];
+            const cacheAge = cached ? Date.now() - cached.timestamp : Infinity;
+            if (!forceRefresh && cached && cacheAge < 5 * 60 * 1000) {
+                displayAnalysis(pair, cached.analysis, cached.confluence, cached.timestamp, true);
+                return;
+            }
+
             panel.innerHTML = '<button class="panel-close-btn" onclick="closeAnalysisPanel()">✕</button><div class="loading"><div class="spinner"></div>Analyzing ' + pair + ' (live, ' + selectedInterval + ')...</div>';
             panel.classList.add('active');
 
@@ -606,7 +617,10 @@
                     fetchLiveAnalysis(pair.toUpperCase(), apiKey, selectedInterval, livePrice),
                     getMultiTimeframeConfluence(pair.toUpperCase(), apiKey, livePrice)
                 ]);
-                displayAnalysis(pair.toUpperCase(), analysis, confluence);
+
+                const timestamp = Date.now();
+                analysisCache[cacheKey] = { analysis, confluence, timestamp };
+                displayAnalysis(pair.toUpperCase(), analysis, confluence, timestamp, false);
             } catch (error) {
                 panel.innerHTML = `<div class="error">❌ ${error.message}</div>`;
             }
@@ -730,13 +744,17 @@
 
             const results = await Promise.all(
                 timeframes.map(async ({ tf, label }) => {
-                    try {
-                        const data = await tdFetch('supertrend', symbol, apiKey, tf, '&period=10&multiplier=3');
-                        const st = parseFloat(data.values?.[0]?.supertrend);
-                        const trend = livePrice > st ? 'BULLISH' : 'BEARISH';
-                        return { label, trend };
-                    } catch (e) {
-                        return { label, trend: 'N/A' };
+                    for (let attempt = 0; attempt < 2; attempt++) {
+                        try {
+                            const data = await tdFetch('supertrend', symbol, apiKey, tf, '&period=10&multiplier=3');
+                            const st = parseFloat(data.values?.[0]?.supertrend);
+                            if (isNaN(st)) throw new Error('No data');
+                            const trend = livePrice > st ? 'BULLISH' : 'BEARISH';
+                            return { label, trend };
+                        } catch (e) {
+                            if (attempt === 1) return { label, trend: 'N/A' };
+                            await new Promise(r => setTimeout(r, 1500));
+                        }
                     }
                 })
             );
@@ -753,7 +771,7 @@
             }
         }
 
-        function displayAnalysis(pair, analysis, confluence = []) {
+        function displayAnalysis(pair, analysis, confluence = [], timestamp = null, fromCache = false) {
             const panel = document.getElementById('analysisPanel');
 
             const colors = {
@@ -784,15 +802,16 @@
                 </div>
             ` : '';
 
-            const now = new Date();
+            const now = timestamp ? new Date(timestamp) : new Date();
             const timeStr = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+            const cacheLabel = fromCache ? ' <span style="color:#888;">(cached)</span>' : '';
 
             // Rebuild the ENTIRE panel HTML fresh every time (panel gets wiped during loading state)
             panel.innerHTML = `
                 <button class="panel-close-btn" onclick="closeAnalysisPanel()">✕</button>
                 <div style="text-align:center; font-size:11px; color:#888; margin-bottom:10px;">
-                    🕐 Last Updated: ${timeStr}
-                    <button onclick="analyzePair('${pair}')" style="margin-left:10px; padding:3px 10px; font-size:10px; background:rgba(255,184,0,0.15); color:#FFB800; border:1px solid rgba(255,140,0,0.4); border-radius:12px;">🔄 Refresh</button>
+                    🕐 Last Updated: ${timeStr}${cacheLabel}
+                    <button onclick="analyzePair('${pair}', true)" style="margin-left:10px; padding:3px 10px; font-size:10px; background:rgba(255,184,0,0.15); color:#FFB800; border:1px solid rgba(255,140,0,0.4); border-radius:12px;">🔄 Refresh</button>
                 </div>
                 <div class="diagnosis-header">
                     <div class="diagnosis-title">${pair}</div>
