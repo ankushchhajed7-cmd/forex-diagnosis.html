@@ -774,12 +774,12 @@
         function displayAnalysis(pair, analysis, confluence = [], timestamp = null, fromCache = false) {
             const panel = document.getElementById('analysisPanel');
 
-            const colors = {
-                'LOW': 'rgba(0, 255, 150, 0.8)',
-                'MEDIUM': 'rgba(255, 184, 0, 0.8)',
-                'HIGH': 'rgba(255, 68, 68, 0.8)'
+            const signalColors = {
+                'BUY': 'rgba(0, 255, 150, 0.8)',
+                'SELL': 'rgba(255, 68, 68, 0.8)',
+                'HOLD': 'rgba(255, 184, 0, 0.8)'
             };
-            const colorKey = analysis.riskScore < 40 ? 'LOW' : analysis.riskScore < 70 ? 'MEDIUM' : 'HIGH';
+            const gaugeColor = signalColors[analysis.signal] || signalColors['HOLD'];
             const riskText = analysis.riskScore < 40 ? 'Low Risk' : analysis.riskScore < 70 ? 'Medium Risk' : 'High Risk';
 
             const bullishCount = confluence.filter(c => c.trend === 'BULLISH').length;
@@ -816,7 +816,7 @@
                 <div class="diagnosis-header">
                     <div class="diagnosis-title">${pair}</div>
                     <div class="risk-meter">
-                        <div class="circle-gauge" style="--percent: ${analysis.riskScore}; --color: ${colors[colorKey]};">
+                        <div class="circle-gauge" style="--percent: ${analysis.riskScore}; --color: ${gaugeColor};">
                             <span>${analysis.riskScore}</span>
                         </div>
                         <div class="gauge-info">
