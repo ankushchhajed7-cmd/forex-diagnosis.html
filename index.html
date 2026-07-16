@@ -464,8 +464,10 @@
         }
 
         async function analyzePair(customPair = null) {
-            const pair = customPair || document.getElementById('customPair')?.value || selectedPair;
+            const rawPair = customPair || document.getElementById('customPair')?.value || selectedPair;
+            const pair = rawPair ? rawPair.trim().toUpperCase().replace(/[^A-Z]/g, '') : null;
             if (!pair) return alert('Select or enter a pair');
+            if (pair.length !== 6) return alert('Pair 6 letters ka hona chahiye, jaise EURUSD ya XAUUSD');
 
             const apiKey = localStorage.getItem('td_api_key');
             if (!apiKey) {
