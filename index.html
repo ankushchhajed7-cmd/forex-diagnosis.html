@@ -598,9 +598,13 @@
             panel.classList.add('active');
 
             try {
+                const symbol = toTDSymbol(pair.toUpperCase());
+                const quote = await tdFetch('quote', symbol, apiKey, selectedInterval);
+                const livePrice = parseFloat(quote.close);
+
                 const [analysis, confluence] = await Promise.all([
-                    fetchLiveAnalysis(pair.toUpperCase(), apiKey, selectedInterval),
-                    getMultiTimeframeConfluence(pair.toUpperCase(), apiKey)
+                    fetchLiveAnalysis(pair.toUpperCase(), apiKey, selectedInterval, livePrice),
+                    getMultiTimeframeConfluence(pair.toUpperCase(), apiKey, livePrice)
                 ]);
                 displayAnalysis(pair.toUpperCase(), analysis, confluence);
             } catch (error) {
@@ -652,19 +656,18 @@
             return data;
         }
 
-        async function fetchLiveAnalysis(pair, apiKey, interval) {
+        async function fetchLiveAnalysis(pair, apiKey, interval, livePrice) {
             const symbol = toTDSymbol(pair);
             const decimals = pair === 'XAUUSD' ? 2 : (pair === 'USDJPY' ? 3 : 5);
 
-            const [quote, rsiData, macdData, supertrendData, atrData] = await Promise.all([
-                tdFetch('quote', symbol, apiKey, interval),
+            const [rsiData, macdData, supertrendData, atrData] = await Promise.all([
                 tdFetch('rsi', symbol, apiKey, interval, '&time_period=14'),
                 tdFetch('macd', symbol, apiKey, interval),
                 tdFetch('supertrend', symbol, apiKey, interval, '&period=10&multiplier=3'),
                 tdFetch('atr', symbol, apiKey, interval, '&time_period=14')
             ]);
 
-            const price = parseFloat(quote.close);
+            const price = livePrice;
             const rsi = parseFloat(rsiData.values?.[0]?.rsi || 50);
             const rsiSignal = rsi > 70 ? 'OVERBOUGHT' : rsi < 30 ? 'OVERSOLD' : 'NEUTRAL';
 
@@ -673,9 +676,10 @@
             const macdBullish = macdLine > macdSig;
             const macdSignal = macdBullish ? 'BULLISH CROSS' : 'BEARISH CROSS';
 
+            // Compare CURRENT live price against the Supertrend line value - this is the
+            // standard way to read Supertrend and stays valid until the line itself flips.
             const stValue = parseFloat(supertrendData.values?.[0]?.supertrend || price);
-            const stClosePrice = parseFloat(supertrendData.values?.[0]?.close || price);
-            const supertrend = stClosePrice > stValue ? 'BULLISH' : 'BEARISH';
+            const supertrend = price > stValue ? 'BULLISH' : 'BEARISH';
 
             const atr = parseFloat(atrData.values?.[0]?.atr || price * 0.005);
 
@@ -715,7 +719,7 @@
             };
         }
 
-        async function getMultiTimeframeConfluence(pair, apiKey) {
+        async function getMultiTimeframeConfluence(pair, apiKey, livePrice) {
             const symbol = toTDSymbol(pair);
             const timeframes = [
                 { tf: '5min', label: '5 Minute' },
@@ -729,8 +733,7 @@
                     try {
                         const data = await tdFetch('supertrend', symbol, apiKey, tf, '&period=10&multiplier=3');
                         const st = parseFloat(data.values?.[0]?.supertrend);
-                        const closePrice = parseFloat(data.values?.[0]?.close || st);
-                        const trend = closePrice > st ? 'BULLISH' : 'BEARISH';
+                        const trend = livePrice > st ? 'BULLISH' : 'BEARISH';
                         return { label, trend };
                     } catch (e) {
                         return { label, trend: 'N/A' };
