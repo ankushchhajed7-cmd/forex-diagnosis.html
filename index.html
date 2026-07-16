@@ -420,29 +420,7 @@
 
         <div id="pairsContainer" class="pairs-container"></div>
 
-        <div id="analysisPanel" class="analysis-panel">
-            <div class="diagnosis-header">
-                <div class="diagnosis-title" id="pairTitle">EURUSD</div>
-                <div class="risk-meter">
-                    <div class="circle-gauge" id="riskGauge" style="--percent: 65; --color: #FFB800;">
-                        <span id="riskScore">65</span>
-                    </div>
-                    <div class="gauge-info">
-                        <div class="signal-label" id="signalLabel">BUY</div>
-                        <div class="risk-level" id="riskLevel">Medium Risk - Good RRR</div>
-                    </div>
-                </div>
-            </div>
-
-            <div id="analysisContent"></div>
-
-            <div class="action-buttons">
-                <button class="btn-secondary" onclick="shareWhatsApp()">📱 Share</button>
-                <button class="btn-secondary" onclick="savAnalysis()">💾 Save</button>
-            </div>
-
-            <div class="free-badge">✨ INSTANT ANALYSIS</div>
-        </div>
+        <div id="analysisPanel" class="analysis-panel"></div>
 
         <div class="info-text">
             API by TwelveData | Markets Live
@@ -537,66 +515,73 @@
 
         function displayAnalysis(pair, analysis) {
             const panel = document.getElementById('analysisPanel');
-            
-            // Update header
-            document.getElementById('pairTitle').textContent = pair;
-            document.getElementById('riskScore').textContent = analysis.riskScore;
-            
-            const signalLabel = document.getElementById('signalLabel');
-            signalLabel.textContent = analysis.signal;
-            signalLabel.className = 'signal-label ' + analysis.signal.toLowerCase();
-            
-            const riskText = analysis.riskScore < 40 ? 'Low Risk' : analysis.riskScore < 70 ? 'Medium Risk' : 'High Risk';
-            document.getElementById('riskLevel').textContent = `${riskText} • RRR ${analysis.rrr}:1 • ${analysis.confidence}% Confidence`;
-            
-            // Update gauge color
-            const gauge = document.getElementById('riskGauge');
+
             const colors = {
                 'LOW': 'rgba(0, 255, 150, 0.8)',
                 'MEDIUM': 'rgba(255, 184, 0, 0.8)',
                 'HIGH': 'rgba(255, 68, 68, 0.8)'
             };
             const colorKey = analysis.riskScore < 40 ? 'LOW' : analysis.riskScore < 70 ? 'MEDIUM' : 'HIGH';
-            gauge.style.setProperty('--color', colors[colorKey]);
-            gauge.style.setProperty('--percent', analysis.riskScore);
+            const riskText = analysis.riskScore < 40 ? 'Low Risk' : analysis.riskScore < 70 ? 'Medium Risk' : 'High Risk';
 
-            // Build analysis content
-            const content = `
-                <div class="analysis-row">
-                    <span class="analysis-label">Supertrend (H1)</span>
-                    <span class="analysis-value ${analysis.supertrend === 'BULLISH' ? 'bullish' : 'bearish'}">${analysis.supertrend}</span>
+            // Rebuild the ENTIRE panel HTML fresh every time (panel gets wiped during loading state)
+            panel.innerHTML = `
+                <div class="diagnosis-header">
+                    <div class="diagnosis-title">${pair}</div>
+                    <div class="risk-meter">
+                        <div class="circle-gauge" style="--percent: ${analysis.riskScore}; --color: ${colors[colorKey]};">
+                            <span>${analysis.riskScore}</span>
+                        </div>
+                        <div class="gauge-info">
+                            <div class="signal-label ${analysis.signal.toLowerCase()}">${analysis.signal}</div>
+                            <div class="risk-level">${riskText} • RRR ${analysis.rrr}:1 • ${analysis.confidence}% Confidence</div>
+                        </div>
+                    </div>
                 </div>
-                <div class="analysis-row">
-                    <span class="analysis-label">RSI (14)</span>
-                    <span class="analysis-value">${analysis.rsi.toFixed(0)} - ${analysis.rsiSignal}</span>
+
+                <div id="analysisContent">
+                    <div class="analysis-row">
+                        <span class="analysis-label">Supertrend (H1)</span>
+                        <span class="analysis-value ${analysis.supertrend === 'BULLISH' ? 'bullish' : 'bearish'}">${analysis.supertrend}</span>
+                    </div>
+                    <div class="analysis-row">
+                        <span class="analysis-label">RSI (14)</span>
+                        <span class="analysis-value">${analysis.rsi.toFixed(0)} - ${analysis.rsiSignal}</span>
+                    </div>
+                    <div class="analysis-row">
+                        <span class="analysis-label">MACD Signal</span>
+                        <span class="analysis-value">${analysis.macd}</span>
+                    </div>
+                    <div class="analysis-row">
+                        <span class="analysis-label">ATR High</span>
+                        <span class="analysis-value">${analysis.atrHigh.toFixed(0)} pips</span>
+                    </div>
+                    <div class="analysis-row" style="border-bottom: 2px solid rgba(255, 140, 0, 0.2); margin-bottom: 12px;">
+                        <span class="analysis-label">Confluence</span>
+                        <span class="analysis-value">${analysis.supertrend === 'BULLISH' ? '↗️' : '↘️'} Multi-TF Aligned</span>
+                    </div>
+                    <div class="analysis-row">
+                        <span class="analysis-label">📍 Entry Zone</span>
+                        <span class="analysis-value" style="color: #FFB800;">${analysis.entryZone}</span>
+                    </div>
+                    <div class="analysis-row">
+                        <span class="analysis-label">🛑 SL Zone</span>
+                        <span class="analysis-value">${analysis.slZone}</span>
+                    </div>
+                    <div class="analysis-row">
+                        <span class="analysis-label">🎯 TP Zone</span>
+                        <span class="analysis-value" style="color: #00FF96;">${analysis.tpZone}</span>
+                    </div>
                 </div>
-                <div class="analysis-row">
-                    <span class="analysis-label">MACD Signal</span>
-                    <span class="analysis-value">${analysis.macd}</span>
+
+                <div class="action-buttons">
+                    <button class="btn-secondary" onclick="shareWhatsApp()">📱 Share</button>
+                    <button class="btn-secondary" onclick="savAnalysis()">💾 Save</button>
                 </div>
-                <div class="analysis-row">
-                    <span class="analysis-label">ATR High</span>
-                    <span class="analysis-value">${analysis.atrHigh.toFixed(0)} pips</span>
-                </div>
-                <div class="analysis-row" style="border-bottom: 2px solid rgba(255, 140, 0, 0.2); margin-bottom: 12px;">
-                    <span class="analysis-label">Confluence</span>
-                    <span class="analysis-value">${analysis.supertrend === 'BULLISH' ? '↗️' : '↘️'} Multi-TF Aligned</span>
-                </div>
-                <div class="analysis-row">
-                    <span class="analysis-label">📍 Entry Zone</span>
-                    <span class="analysis-value" style="color: #FFB800;">${analysis.entryZone}</span>
-                </div>
-                <div class="analysis-row">
-                    <span class="analysis-label">🛑 SL Zone</span>
-                    <span class="analysis-value">${analysis.slZone}</span>
-                </div>
-                <div class="analysis-row">
-                    <span class="analysis-label">🎯 TP Zone</span>
-                    <span class="analysis-value" style="color: #00FF96;">${analysis.tpZone}</span>
-                </div>
+
+                <div class="free-badge">✨ INSTANT ANALYSIS</div>
             `;
 
-            document.getElementById('analysisContent').innerHTML = content;
             panel.classList.add('active');
 
             // Store for sharing
