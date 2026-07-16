@@ -392,6 +392,9 @@
             <button id="installBtn" onclick="installApp()" style="display:none; margin-top:10px; background: linear-gradient(135deg, #00FF96 0%, #00CC7A 100%); color:#000;">
                 📲 Install App
             </button>
+            <button onclick="openSettings()" style="margin-top:10px; background: rgba(255,255,255,0.1); color:#FFB800; border:1px solid rgba(255,140,0,0.3);">
+                ⚙️ API Settings
+            </button>
         </header>
 
         <div class="controls">
@@ -464,66 +467,83 @@
             const pair = customPair || document.getElementById('customPair')?.value || selectedPair;
             if (!pair) return alert('Select or enter a pair');
 
+            const apiKey = localStorage.getItem('td_api_key');
+            if (!apiKey) {
+                openSettings();
+                return;
+            }
+
             const panel = document.getElementById('analysisPanel');
-            panel.innerHTML = '<div class="loading"><div class="spinner"></div>Analyzing ' + pair + '...</div>';
+            panel.innerHTML = '<div class="loading"><div class="spinner"></div>Analyzing ' + pair + ' (live)...</div>';
             panel.classList.add('active');
 
             try {
-                // Simulate API call with demo data
-                await new Promise(r => setTimeout(r, 1200));
-                
-                const analysis = generateForexAnalysis(pair);
-                displayAnalysis(pair, analysis);
-                
+                const analysis = await fetchLiveAnalysis(pair.toUpperCase(), apiKey);
+                displayAnalysis(pair.toUpperCase(), analysis);
             } catch (error) {
                 panel.innerHTML = `<div class="error">❌ ${error.message}</div>`;
             }
         }
 
-        function generateForexAnalysis(pair) {
-            // Pair-specific realistic base prices & decimal precision
-            const pairConfig = {
-                'EURUSD': { base: 1.0850, decimals: 4 },
-                'GBPUSD': { base: 1.2650, decimals: 4 },
-                'USDJPY': { base: 155.50, decimals: 2 },
-                'AUDUSD': { base: 0.6550, decimals: 4 },
-                'XAUUSD': { base: 2650.00, decimals: 2 },
-                'NZDUSD': { base: 0.6050, decimals: 4 }
-            };
-            const config = pairConfig[pair.toUpperCase()] || { base: 1.1000, decimals: 4 };
+        function toTDSymbol(pair) {
+            // EURUSD -> EUR/USD, XAUUSD -> XAU/USD
+            return pair.slice(0, 3) + '/' + pair.slice(3);
+        }
 
-            // Pseudo-AI analysis generator
-            const seed = pair.charCodeAt(0) + pair.charCodeAt(1) + pair.length;
-            const supertrend = seed % 2 === 0 ? 'BULLISH' : 'BEARISH';
-            const rsi = 35 + (seed % 60);
+        async function tdFetch(endpoint, symbol, apiKey, extra = '') {
+            const url = `https://api.twelvedata.com/${endpoint}?symbol=${encodeURIComponent(symbol)}&interval=1h&apikey=${apiKey}${extra}`;
+            const res = await fetch(url);
+            const data = await res.json();
+            if (data.status === 'error' || data.code) {
+                throw new Error(data.message || 'API error - check your key or rate limit');
+            }
+            return data;
+        }
+
+        async function fetchLiveAnalysis(pair, apiKey) {
+            const symbol = toTDSymbol(pair);
+            const decimals = pair === 'XAUUSD' ? 2 : (pair === 'USDJPY' ? 3 : 5);
+
+            const [quote, rsiData, macdData, supertrendData, atrData] = await Promise.all([
+                tdFetch('quote', symbol, apiKey),
+                tdFetch('rsi', symbol, apiKey, '&time_period=14'),
+                tdFetch('macd', symbol, apiKey),
+                tdFetch('supertrend', symbol, apiKey, '&period=10&multiplier=3'),
+                tdFetch('atr', symbol, apiKey, '&time_period=14')
+            ]);
+
+            const price = parseFloat(quote.close);
+            const rsi = parseFloat(rsiData.values?.[0]?.rsi || 50);
             const rsiSignal = rsi > 70 ? 'OVERBOUGHT' : rsi < 30 ? 'OVERSOLD' : 'NEUTRAL';
-            const macdBullish = seed % 3 === 0;
-            const macdBearish = seed % 3 === 1;
-            const macdSignal = macdBullish ? 'BULLISH CROSS' : macdBearish ? 'BEARISH CROSS' : 'CONSOLIDATION';
-            const atrHigh = 100 + (seed % 200);
-            const rrr = (2 + (seed % 3)).toFixed(1);
-            const riskScore = 40 + (seed % 60);
-            const confidence = 60 + (seed % 40);
 
-            // Signal now derived FROM the indicators so it's internally consistent
+            const macdLine = parseFloat(macdData.values?.[0]?.macd || 0);
+            const macdSig = parseFloat(macdData.values?.[0]?.macd_signal || 0);
+            const macdBullish = macdLine > macdSig;
+            const macdSignal = macdBullish ? 'BULLISH CROSS' : 'BEARISH CROSS';
+
+            const stValue = parseFloat(supertrendData.values?.[0]?.supertrend || price);
+            const supertrend = price > stValue ? 'BULLISH' : 'BEARISH';
+
+            const atr = parseFloat(atrData.values?.[0]?.atr || price * 0.005);
+
+            // Signal from real indicator confluence
             let signal = 'HOLD';
-            if (supertrend === 'BULLISH' && !macdBearish) signal = 'BUY';
+            if (supertrend === 'BULLISH' && macdBullish) signal = 'BUY';
             else if (supertrend === 'BEARISH' && !macdBullish) signal = 'SELL';
 
-            // Price zones scaled correctly per instrument (percentage-based, not fixed pips)
-            const variation = ((seed % 100) - 50) / 10000; // small ± offset
-            const entryZone = config.base * (1 + variation);
-            const slPercent = 0.008; // 0.8% stop distance
-            const tpPercent = slPercent * parseFloat(rrr);
+            const confluenceCount = (supertrend === 'BULLISH' ? 1 : 0) + (macdBullish ? 1 : 0) + (rsiSignal === 'NEUTRAL' ? 1 : 0);
+            const confidence = 50 + confluenceCount * 15;
+            const riskScore = rsiSignal !== 'NEUTRAL' ? 70 : (signal === 'HOLD' ? 55 : 35);
+            const rrr = '2.0';
 
+            const entryZone = price;
             let slZone, tpZone;
             if (signal === 'SELL') {
-                slZone = entryZone * (1 + slPercent);
-                tpZone = entryZone * (1 - tpPercent);
+                slZone = entryZone + atr * 1.5;
+                tpZone = entryZone - atr * 1.5 * parseFloat(rrr);
             } else {
-                // BUY or HOLD - show a BUY-style bracket for reference
-                slZone = entryZone * (1 - slPercent);
-                tpZone = entryZone * (1 + tpPercent);
+                slZone = entryZone - atr * 1.5;
+                tpZone = entryZone + atr * 1.5 * parseFloat(rrr);
             }
 
             return {
@@ -534,12 +554,21 @@
                 rsi,
                 rsiSignal,
                 macd: macdSignal,
-                atrHigh,
+                atrHigh: atr,
                 rrr,
-                entryZone: entryZone.toFixed(config.decimals),
-                slZone: slZone.toFixed(config.decimals),
-                tpZone: tpZone.toFixed(config.decimals)
+                entryZone: entryZone.toFixed(decimals),
+                slZone: slZone.toFixed(decimals),
+                tpZone: tpZone.toFixed(decimals)
             };
+        }
+
+        function openSettings() {
+            const existing = localStorage.getItem('td_api_key') || '';
+            const key = prompt('TwelveData API Key daalo (twelvedata.com se free milti hai):', existing);
+            if (key !== null && key.trim() !== '') {
+                localStorage.setItem('td_api_key', key.trim());
+                alert('✅ API key saved! Ab pair analyze karo.');
+            }
         }
 
         function displayAnalysis(pair, analysis) {
@@ -583,7 +612,7 @@
                     </div>
                     <div class="analysis-row">
                         <span class="analysis-label">ATR High</span>
-                        <span class="analysis-value">${analysis.atrHigh.toFixed(0)} pips</span>
+                        <span class="analysis-value">${analysis.atrHigh < 1 ? analysis.atrHigh.toFixed(5) : analysis.atrHigh.toFixed(2)}</span>
                     </div>
                     <div class="analysis-row" style="border-bottom: 2px solid rgba(255, 140, 0, 0.2); margin-bottom: 12px;">
                         <span class="analysis-label">Confluence</span>
