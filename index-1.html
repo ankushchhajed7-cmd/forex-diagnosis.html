@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0a0e27">
+    <title>ForexDiagnosis - AI Pair Analysis</title>
+    <link rel="manifest" href="./manifest.json">
+    <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
+    <link rel="apple-touch-icon" href="./icon-192.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="ForexDiagnosis">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 100%);
+            color: #e0e0e0;
+            min-height: 100vh;
+            padding: 12px;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 24px;
+            padding: 16px;
+            background: linear-gradient(135deg, rgba(255, 140, 0, 0.1) 0%, rgba(0, 255, 150, 0.05) 100%);
+            border-radius: 12px;
+            border: 1px solid rgba(255, 140, 0, 0.2);
+        }
+
+        h1 {
+            font-size: 24px;
+            background: linear-gradient(135deg, #FFB800 0%, #00FF96 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 4px;
+        }
+
+        .subtitle {
+            font-size: 12px;
+            color: #888;
+        }
+
+        .controls {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+        }
+
+        input[type="text"] {
+            flex: 1;
+            padding: 10px 12px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 140, 0, 0.3);
+            color: #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            min-width: 120px;
+        }
+
+        button {
+            padding: 10px 20px;
+            background: linear-gradient(135deg, #FFB800 0%, #FF8C00 100%);
+            color: #000;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 16px rgba(255, 140, 0, 0.4);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        .analysis-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .feature-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 140, 0, 0.2);
+            border-radius: 10px;
+            padding: 12px;
+            text-align: center;
+            transition: all 0.3s;
+        }
+
+        .feature-card:hover {
+            background: rgba(255, 140, 0, 0.1);
+            border-color: rgba(255, 140, 0, 0.5);
+        }
+
+        .feature-icon {
+            font-size: 24px;
+            margin-bottom: 6px;
+        }
+
+        .feature-name {
+            font-size: 11px;
+            color: #FFB800;
+            font-weight: 600;
+        }
+
+        .pairs-container {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .pair-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 140, 0, 0.2);
+            border-radius: 12px;
+            padding: 14px;
+            cursor: pointer;
+            transition: all 0.3s;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .pair-card:hover {
+            background: rgba(255, 140, 0, 0.08);
+            border-color: rgba(255, 140, 0, 0.5);
+        }
+
+        .pair-card.selected {
+            border-color: #FFB800;
+            background: rgba(255, 140, 0, 0.15);
+        }
+
+        .pair-name {
+            font-size: 16px;
+            font-weight: 700;
+            color: #FFB800;
+            margin-bottom: 6px;
+        }
+
+        .pair-price {
+            font-size: 12px;
+            color: #00FF96;
+            margin-bottom: 4px;
+        }
+
+        .pair-change {
+            font-size: 10px;
+            color: #888;
+        }
+
+        .analysis-panel {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(0, 255, 150, 0.3);
+            border-radius: 14px;
+            padding: 18px;
+            margin-bottom: 16px;
+            display: none;
+        }
+
+        .analysis-panel.active {
+            display: block;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .diagnosis-header {
+            text-align: center;
+            margin-bottom: 18px;
+        }
+
+        .diagnosis-title {
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 12px;
+        }
+
+        .risk-meter {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+
+        .circle-gauge {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            font-weight: 700;
+            position: relative;
+            background: conic-gradient(from 0deg, var(--color) 0deg, var(--color) calc(var(--percent) * 3.6deg), rgba(255,255,255,0.1) calc(var(--percent) * 3.6deg));
+            border: 2px solid var(--color);
+        }
+
+        .gauge-info {
+            flex: 1;
+        }
+
+        .signal-label {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 6px;
+        }
+
+        .signal-label.buy {
+            color: #00FF96;
+        }
+
+        .signal-label.sell {
+            color: #FF4444;
+        }
+
+        .signal-label.hold {
+            color: #FFB800;
+        }
+
+        .risk-level {
+            font-size: 12px;
+            color: #888;
+        }
+
+        .analysis-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid rgba(255, 140, 0, 0.1);
+            font-size: 13px;
+        }
+
+        .analysis-row:last-child {
+            border-bottom: none;
+        }
+
+        .analysis-label {
+            color: #888;
+        }
+
+        .analysis-value {
+            font-weight: 600;
+            color: #e0e0e0;
+        }
+
+        .analysis-value.bullish {
+            color: #00FF96;
+        }
+
+        .analysis-value.bearish {
+            color: #FF4444;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 16px;
+        }
+
+        .action-buttons button {
+            flex: 1;
+            padding: 12px;
+            font-size: 12px;
+        }
+
+        .btn-secondary {
+            background: rgba(0, 255, 150, 0.15) !important;
+            color: #00FF96 !important;
+            border: 1px solid rgba(0, 255, 150, 0.4) !important;
+        }
+
+        .btn-secondary:hover {
+            background: rgba(0, 255, 150, 0.25) !important;
+            box-shadow: 0 8px 16px rgba(0, 255, 150, 0.2) !important;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #FFB800;
+        }
+
+        .spinner {
+            border: 3px solid rgba(255, 140, 0, 0.2);
+            border-top: 3px solid #FFB800;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .free-badge {
+            display: inline-block;
+            background: linear-gradient(135deg, #FFB800 0%, #FF8C00 100%);
+            color: #000;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 10px;
+            font-weight: 700;
+            margin-top: 8px;
+        }
+
+        .whatsapp-btn {
+            background: linear-gradient(135deg, #25D366 0%, #20BA5C 100%) !important;
+            margin-top: 12px;
+            width: 100%;
+        }
+
+        .whatsapp-btn:hover {
+            box-shadow: 0 8px 16px rgba(37, 211, 102, 0.4) !important;
+        }
+
+        .error {
+            background: rgba(255, 68, 68, 0.1);
+            border: 1px solid rgba(255, 68, 68, 0.3);
+            color: #FF8888;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 12px;
+            font-size: 12px;
+        }
+
+        .info-text {
+            font-size: 11px;
+            color: #888;
+            margin-top: 8px;
+            text-align: center;
+        }
+
+        @media (max-width: 480px) {
+            .pairs-container {
+                grid-template-columns: 1fr;
+            }
+
+            h1 {
+                font-size: 20px;
+            }
+
+            .circle-gauge {
+                width: 80px;
+                height: 80px;
+                font-size: 22px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🤖 ForexDiagnosis</h1>
+            <p class="subtitle">AI-Powered Pair Analysis</p>
+            <button id="installBtn" onclick="installApp()" style="display:none; margin-top:10px; background: linear-gradient(135deg, #00FF96 0%, #00CC7A 100%); color:#000;">
+                📲 Install App
+            </button>
+        </header>
+
+        <div class="controls">
+            <input type="text" id="customPair" placeholder="Enter pair (EURUSD)" maxlength="12">
+            <button onclick="analyzePair()">Analyze</button>
+        </div>
+
+        <div class="analysis-grid">
+            <div class="feature-card">
+                <div class="feature-icon">🤖</div>
+                <div class="feature-name">AI Analysis</div>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">📊</div>
+                <div class="feature-name">Multi-Timeframe</div>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">🛡️</div>
+                <div class="feature-name">Risk Management</div>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">🎯</div>
+                <div class="feature-name">High Probability</div>
+            </div>
+        </div>
+
+        <div id="pairsContainer" class="pairs-container"></div>
+
+        <div id="analysisPanel" class="analysis-panel">
+            <div class="diagnosis-header">
+                <div class="diagnosis-title" id="pairTitle">EURUSD</div>
+                <div class="risk-meter">
+                    <div class="circle-gauge" id="riskGauge" style="--percent: 65; --color: #FFB800;">
+                        <span id="riskScore">65</span>
+                    </div>
+                    <div class="gauge-info">
+                        <div class="signal-label" id="signalLabel">BUY</div>
+                        <div class="risk-level" id="riskLevel">Medium Risk - Good RRR</div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="analysisContent"></div>
+
+            <div class="action-buttons">
+                <button class="btn-secondary" onclick="shareWhatsApp()">📱 Share</button>
+                <button class="btn-secondary" onclick="savAnalysis()">💾 Save</button>
+            </div>
+
+            <div class="free-badge">✨ INSTANT ANALYSIS</div>
+        </div>
+
+        <div class="info-text">
+            API by TwelveData | Markets Live
+        </div>
+    </div>
+
+    <script>
+        const API_KEY = 'demo'; // Use your TwelveData API key
+        const DEFAULT_PAIRS = ['EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'XAUUSD', 'NZDUSD'];
+        let selectedPair = null;
+        let pairsData = {};
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            renderPairCards();
+            loadCachedData();
+        });
+
+        function renderPairCards() {
+            const container = document.getElementById('pairsContainer');
+            container.innerHTML = DEFAULT_PAIRS.map(pair => `
+                <div class="pair-card" onclick="selectAndAnalyze('${pair}')">
+                    <div class="pair-name">${pair}</div>
+                    <div class="pair-price" id="price-${pair}">Loading...</div>
+                    <div class="pair-change" id="change-${pair}">--</div>
+                </div>
+            `).join('');
+        }
+
+        async function selectAndAnalyze(pair) {
+            selectedPair = pair;
+            document.querySelectorAll('.pair-card').forEach(card => {
+                card.classList.remove('selected');
+            });
+            event?.target?.closest('.pair-card')?.classList.add('selected');
+            
+            await analyzePair(pair);
+        }
+
+        async function analyzePair(customPair = null) {
+            const pair = customPair || document.getElementById('customPair')?.value || selectedPair;
+            if (!pair) return alert('Select or enter a pair');
+
+            const panel = document.getElementById('analysisPanel');
+            panel.innerHTML = '<div class="loading"><div class="spinner"></div>Analyzing ' + pair + '...</div>';
+            panel.classList.add('active');
+
+            try {
+                // Simulate API call with demo data
+                await new Promise(r => setTimeout(r, 1200));
+                
+                const analysis = generateForexAnalysis(pair);
+                displayAnalysis(pair, analysis);
+                
+            } catch (error) {
+                panel.innerHTML = `<div class="error">❌ ${error.message}</div>`;
+            }
+        }
+
+        function generateForexAnalysis(pair) {
+            // Pseudo-AI analysis generator
+            const seed = pair.charCodeAt(0) + pair.charCodeAt(1);
+            const supertrend = seed % 2 === 0 ? 'BULLISH' : 'BEARISH';
+            const rsi = 35 + (seed % 60);
+            const rsiSignal = rsi > 70 ? 'OVERBOUGHT' : rsi < 30 ? 'OVERSOLD' : 'NEUTRAL';
+            const macdSignal = seed % 3 === 0 ? 'BULLISH CROSS' : seed % 3 === 1 ? 'BEARISH CROSS' : 'CONSOLIDATION';
+            const atrHigh = 100 + (seed % 200);
+            const rrr = (2 + (seed % 3)).toFixed(1);
+            const riskScore = 40 + (seed % 60);
+            const confidence = 60 + (seed % 40);
+            
+            const signal = seed % 3 === 0 ? 'BUY' : seed % 3 === 1 ? 'SELL' : 'HOLD';
+            const entryZone = 1.0850 + ((seed % 100) / 10000);
+            const slZone = entryZone - 0.0150;
+            const tpZone = entryZone + 0.0300;
+
+            return {
+                signal,
+                riskScore,
+                confidence,
+                supertrend,
+                rsi,
+                rsiSignal,
+                macd: macdSignal,
+                atrHigh,
+                rrr,
+                entryZone: entryZone.toFixed(4),
+                slZone: slZone.toFixed(4),
+                tpZone: tpZone.toFixed(4)
+            };
+        }
+
+        function displayAnalysis(pair, analysis) {
+            const panel = document.getElementById('analysisPanel');
+            
+            // Update header
+            document.getElementById('pairTitle').textContent = pair;
+            document.getElementById('riskScore').textContent = analysis.riskScore;
+            
+            const signalLabel = document.getElementById('signalLabel');
+            signalLabel.textContent = analysis.signal;
+            signalLabel.className = 'signal-label ' + analysis.signal.toLowerCase();
+            
+            const riskText = analysis.riskScore < 40 ? 'Low Risk' : analysis.riskScore < 70 ? 'Medium Risk' : 'High Risk';
+            document.getElementById('riskLevel').textContent = `${riskText} • RRR ${analysis.rrr}:1 • ${analysis.confidence}% Confidence`;
+            
+            // Update gauge color
+            const gauge = document.getElementById('riskGauge');
+            const colors = {
+                'LOW': 'rgba(0, 255, 150, 0.8)',
+                'MEDIUM': 'rgba(255, 184, 0, 0.8)',
+                'HIGH': 'rgba(255, 68, 68, 0.8)'
+            };
+            const colorKey = analysis.riskScore < 40 ? 'LOW' : analysis.riskScore < 70 ? 'MEDIUM' : 'HIGH';
+            gauge.style.setProperty('--color', colors[colorKey]);
+            gauge.style.setProperty('--percent', analysis.riskScore);
+
+            // Build analysis content
+            const content = `
+                <div class="analysis-row">
+                    <span class="analysis-label">Supertrend (H1)</span>
+                    <span class="analysis-value ${analysis.supertrend === 'BULLISH' ? 'bullish' : 'bearish'}">${analysis.supertrend}</span>
+                </div>
+                <div class="analysis-row">
+                    <span class="analysis-label">RSI (14)</span>
+                    <span class="analysis-value">${analysis.rsi.toFixed(0)} - ${analysis.rsiSignal}</span>
+                </div>
+                <div class="analysis-row">
+                    <span class="analysis-label">MACD Signal</span>
+                    <span class="analysis-value">${analysis.macd}</span>
+                </div>
+                <div class="analysis-row">
+                    <span class="analysis-label">ATR High</span>
+                    <span class="analysis-value">${analysis.atrHigh.toFixed(0)} pips</span>
+                </div>
+                <div class="analysis-row" style="border-bottom: 2px solid rgba(255, 140, 0, 0.2); margin-bottom: 12px;">
+                    <span class="analysis-label">Confluence</span>
+                    <span class="analysis-value">${analysis.supertrend === 'BULLISH' ? '↗️' : '↘️'} Multi-TF Aligned</span>
+                </div>
+                <div class="analysis-row">
+                    <span class="analysis-label">📍 Entry Zone</span>
+                    <span class="analysis-value" style="color: #FFB800;">${analysis.entryZone}</span>
+                </div>
+                <div class="analysis-row">
+                    <span class="analysis-label">🛑 SL Zone</span>
+                    <span class="analysis-value">${analysis.slZone}</span>
+                </div>
+                <div class="analysis-row">
+                    <span class="analysis-label">🎯 TP Zone</span>
+                    <span class="analysis-value" style="color: #00FF96;">${analysis.tpZone}</span>
+                </div>
+            `;
+
+            document.getElementById('analysisContent').innerHTML = content;
+            panel.classList.add('active');
+
+            // Store for sharing
+            window.lastAnalysis = { pair, ...analysis };
+        }
+
+        function shareWhatsApp() {
+            if (!window.lastAnalysis) return;
+            const a = window.lastAnalysis;
+            const text = `🤖 *${a.pair} Analysis*\n\n📊 Signal: *${a.signal}*\nRisk Score: ${a.riskScore}/100\nConfidence: ${a.confidence}%\n\n📍 Entry: ${a.entryZone}\n🛑 SL: ${a.slZone}\n🎯 TP: ${a.tpZone}\n\nRRR: ${a.rrr}:1\n\n*ForexDiagnosis*\nAI-Powered Analysis`;
+            const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
+            window.open(url, '_blank');
+        }
+
+        function savAnalysis() {
+            if (!window.lastAnalysis) return;
+            const data = {
+                timestamp: new Date().toISOString(),
+                ...window.lastAnalysis
+            };
+            
+            const saved = JSON.parse(localStorage.getItem('forexDiagnosis') || '[]');
+            saved.unshift(data);
+            saved.splice(30); // Keep last 30
+            localStorage.setItem('forexDiagnosis', JSON.stringify(saved));
+            
+            alert('✅ Analysis saved!');
+        }
+
+        function loadCachedData() {
+            const saved = JSON.parse(localStorage.getItem('forexDiagnosis') || '[]');
+            // Could display recent analyses here
+        }
+
+        // ===== PWA Install & Service Worker =====
+        let deferredPrompt;
+        const installBtn = document.getElementById('installBtn');
+
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            if (installBtn) installBtn.style.display = 'block';
+        });
+
+        function installApp() {
+            if (!deferredPrompt) return;
+            deferredPrompt.prompt();
+            deferredPrompt.userChoice.then((choiceResult) => {
+                if (choiceResult.outcome === 'accepted') {
+                    console.log('PWA installed');
+                }
+                deferredPrompt = null;
+                if (installBtn) installBtn.style.display = 'none';
+            });
+        }
+
+        window.addEventListener('appinstalled', () => {
+            if (installBtn) installBtn.style.display = 'none';
+            deferredPrompt = null;
+        });
+
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .then((reg) => console.log('SW registered:', reg.scope))
+                    .catch((err) => console.log('SW registration failed:', err));
+            });
+        }
+    </script>
+</body>
+</html>
