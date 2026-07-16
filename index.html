@@ -501,7 +501,6 @@
         </div>
 
         <div class="tf-selector" style="display:flex; gap:6px; margin-bottom:16px; flex-wrap:wrap;">
-            <button class="tf-btn" data-tf="1min" onclick="setTimeframe('1min', this)">1m</button>
             <button class="tf-btn" data-tf="5min" onclick="setTimeframe('5min', this)">5m</button>
             <button class="tf-btn" data-tf="15min" onclick="setTimeframe('15min', this)">15m</button>
             <button class="tf-btn" data-tf="30min" onclick="setTimeframe('30min', this)">30m</button>
@@ -614,7 +613,36 @@
             return pair.slice(0, 3) + '/' + pair.slice(3);
         }
 
+        // Rate limiter: TwelveData free tier allows 8 calls/minute.
+        // We cap at 7 to leave a safety buffer and auto-queue/wait instead of erroring out.
+        const callTimestamps = [];
+        const MAX_CALLS_PER_MINUTE = 7;
+
+        async function waitForRateSlot() {
+            while (true) {
+                const now = Date.now();
+                while (callTimestamps.length && now - callTimestamps[0] > 60000) {
+                    callTimestamps.shift();
+                }
+                if (callTimestamps.length < MAX_CALLS_PER_MINUTE) {
+                    callTimestamps.push(Date.now());
+                    return;
+                }
+                const waitTime = 60000 - (now - callTimestamps[0]) + 300;
+                updateLoadingMessage(`Free API limit hit - waiting ${Math.ceil(waitTime / 1000)}s...`);
+                await new Promise(r => setTimeout(r, waitTime));
+            }
+        }
+
+        function updateLoadingMessage(msg) {
+            const loadingDiv = document.querySelector('.loading');
+            if (loadingDiv && loadingDiv.lastChild) {
+                loadingDiv.lastChild.textContent = msg;
+            }
+        }
+
         async function tdFetch(endpoint, symbol, apiKey, interval, extra = '') {
+            await waitForRateSlot();
             const url = `https://api.twelvedata.com/${endpoint}?symbol=${encodeURIComponent(symbol)}&interval=${interval}&apikey=${apiKey}${extra}`;
             const res = await fetch(url);
             const data = await res.json();
@@ -689,7 +717,6 @@
         async function getMultiTimeframeConfluence(pair, apiKey) {
             const symbol = toTDSymbol(pair);
             const timeframes = [
-                { tf: '1min', label: '1 Minute' },
                 { tf: '5min', label: '5 Minute' },
                 { tf: '15min', label: '15 Minute' },
                 { tf: '30min', label: '30 Minute' },
