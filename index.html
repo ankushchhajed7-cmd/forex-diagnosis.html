@@ -481,21 +481,50 @@
         }
 
         function generateForexAnalysis(pair) {
+            // Pair-specific realistic base prices & decimal precision
+            const pairConfig = {
+                'EURUSD': { base: 1.0850, decimals: 4 },
+                'GBPUSD': { base: 1.2650, decimals: 4 },
+                'USDJPY': { base: 155.50, decimals: 2 },
+                'AUDUSD': { base: 0.6550, decimals: 4 },
+                'XAUUSD': { base: 2650.00, decimals: 2 },
+                'NZDUSD': { base: 0.6050, decimals: 4 }
+            };
+            const config = pairConfig[pair.toUpperCase()] || { base: 1.1000, decimals: 4 };
+
             // Pseudo-AI analysis generator
-            const seed = pair.charCodeAt(0) + pair.charCodeAt(1);
+            const seed = pair.charCodeAt(0) + pair.charCodeAt(1) + pair.length;
             const supertrend = seed % 2 === 0 ? 'BULLISH' : 'BEARISH';
             const rsi = 35 + (seed % 60);
             const rsiSignal = rsi > 70 ? 'OVERBOUGHT' : rsi < 30 ? 'OVERSOLD' : 'NEUTRAL';
-            const macdSignal = seed % 3 === 0 ? 'BULLISH CROSS' : seed % 3 === 1 ? 'BEARISH CROSS' : 'CONSOLIDATION';
+            const macdBullish = seed % 3 === 0;
+            const macdBearish = seed % 3 === 1;
+            const macdSignal = macdBullish ? 'BULLISH CROSS' : macdBearish ? 'BEARISH CROSS' : 'CONSOLIDATION';
             const atrHigh = 100 + (seed % 200);
             const rrr = (2 + (seed % 3)).toFixed(1);
             const riskScore = 40 + (seed % 60);
             const confidence = 60 + (seed % 40);
-            
-            const signal = seed % 3 === 0 ? 'BUY' : seed % 3 === 1 ? 'SELL' : 'HOLD';
-            const entryZone = 1.0850 + ((seed % 100) / 10000);
-            const slZone = entryZone - 0.0150;
-            const tpZone = entryZone + 0.0300;
+
+            // Signal now derived FROM the indicators so it's internally consistent
+            let signal = 'HOLD';
+            if (supertrend === 'BULLISH' && !macdBearish) signal = 'BUY';
+            else if (supertrend === 'BEARISH' && !macdBullish) signal = 'SELL';
+
+            // Price zones scaled correctly per instrument (percentage-based, not fixed pips)
+            const variation = ((seed % 100) - 50) / 10000; // small ± offset
+            const entryZone = config.base * (1 + variation);
+            const slPercent = 0.008; // 0.8% stop distance
+            const tpPercent = slPercent * parseFloat(rrr);
+
+            let slZone, tpZone;
+            if (signal === 'SELL') {
+                slZone = entryZone * (1 + slPercent);
+                tpZone = entryZone * (1 - tpPercent);
+            } else {
+                // BUY or HOLD - show a BUY-style bracket for reference
+                slZone = entryZone * (1 - slPercent);
+                tpZone = entryZone * (1 + tpPercent);
+            }
 
             return {
                 signal,
@@ -507,9 +536,9 @@
                 macd: macdSignal,
                 atrHigh,
                 rrr,
-                entryZone: entryZone.toFixed(4),
-                slZone: slZone.toFixed(4),
-                tpZone: tpZone.toFixed(4)
+                entryZone: entryZone.toFixed(config.decimals),
+                slZone: slZone.toFixed(config.decimals),
+                tpZone: tpZone.toFixed(config.decimals)
             };
         }
 
