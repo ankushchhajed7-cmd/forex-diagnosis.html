@@ -781,9 +781,16 @@
                 </div>
             ` : '';
 
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+
             // Rebuild the ENTIRE panel HTML fresh every time (panel gets wiped during loading state)
             panel.innerHTML = `
                 <button class="panel-close-btn" onclick="closeAnalysisPanel()">✕</button>
+                <div style="text-align:center; font-size:11px; color:#888; margin-bottom:10px;">
+                    🕐 Last Updated: ${timeStr}
+                    <button onclick="analyzePair('${pair}')" style="margin-left:10px; padding:3px 10px; font-size:10px; background:rgba(255,184,0,0.15); color:#FFB800; border:1px solid rgba(255,140,0,0.4); border-radius:12px;">🔄 Refresh</button>
+                </div>
                 <div class="diagnosis-header">
                     <div class="diagnosis-title">${pair}</div>
                     <div class="risk-meter">
