@@ -61,6 +61,78 @@
             flex-wrap: wrap;
         }
 
+        .tf-selector {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 16px;
+        }
+
+        .tf-btn {
+            flex: 1;
+            padding: 8px 4px;
+            font-size: 12px;
+            font-weight: 600;
+            background: rgba(255, 255, 255, 0.05);
+            color: #888;
+            border: 1px solid rgba(255, 140, 0, 0.2);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .tf-btn.active {
+            background: rgba(255, 184, 0, 0.2);
+            color: #FFB800;
+            border-color: #FFB800;
+        }
+
+        .confluence-table {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            margin: 14px 0;
+        }
+
+        .confluence-cell {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 13px;
+        }
+
+        .confluence-cell .tf-label {
+            color: #ccc;
+            font-weight: 600;
+        }
+
+        .confluence-cell .tf-trend {
+            font-weight: 700;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .confluence-cell.bullish {
+            background: rgba(0, 255, 150, 0.1);
+            border: 1px solid rgba(0, 255, 150, 0.3);
+        }
+
+        .confluence-cell.bullish .tf-trend {
+            color: #00FF96;
+        }
+
+        .confluence-cell.bearish {
+            background: rgba(255, 68, 68, 0.1);
+            border: 1px solid rgba(255, 68, 68, 0.3);
+        }
+
+        .confluence-cell.bearish .tf-trend {
+            color: #FF4444;
+        }
+
         input[type="text"] {
             flex: 1;
             padding: 10px 12px;
@@ -172,17 +244,43 @@
         }
 
         .analysis-panel {
-            background: rgba(255, 255, 255, 0.02);
-            border: 1px solid rgba(0, 255, 150, 0.3);
-            border-radius: 14px;
+            background: #0a0e27;
+            border: none;
+            border-radius: 0;
             padding: 18px;
-            margin-bottom: 16px;
+            padding-top: 50px;
+            margin-bottom: 0;
             display: none;
         }
 
         .analysis-panel.active {
             display: block;
-            animation: slideIn 0.3s ease;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            overflow-y: auto;
+            z-index: 1000;
+            animation: slideIn 0.25s ease;
+        }
+
+        .panel-close-btn {
+            position: fixed;
+            top: 12px;
+            right: 12px;
+            z-index: 1001;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 140, 0, 0.4);
+            color: #FFB800;
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
         }
 
         @keyframes slideIn {
@@ -402,6 +500,14 @@
             <button onclick="analyzePair()">Analyze</button>
         </div>
 
+        <div class="tf-selector" style="display:flex; gap:6px; margin-bottom:16px; flex-wrap:wrap;">
+            <button class="tf-btn" data-tf="1min" onclick="setTimeframe('1min', this)">1m</button>
+            <button class="tf-btn" data-tf="5min" onclick="setTimeframe('5min', this)">5m</button>
+            <button class="tf-btn" data-tf="15min" onclick="setTimeframe('15min', this)">15m</button>
+            <button class="tf-btn" data-tf="30min" onclick="setTimeframe('30min', this)">30m</button>
+            <button class="tf-btn active" data-tf="1h" onclick="setTimeframe('1h', this)">1H</button>
+        </div>
+
         <div class="analysis-grid">
             <div class="feature-card">
                 <div class="feature-icon">🤖</div>
@@ -434,6 +540,19 @@
         const API_KEY = 'demo'; // Use your TwelveData API key
         const DEFAULT_PAIRS = ['EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'XAUUSD', 'NZDUSD'];
         let selectedPair = null;
+        let selectedInterval = '1h';
+
+        function closeAnalysisPanel() {
+            const panel = document.getElementById('analysisPanel');
+            panel.classList.remove('active');
+            panel.innerHTML = '';
+        }
+
+        function setTimeframe(tf, btn) {
+            selectedInterval = tf;
+            document.querySelectorAll('.tf-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+        }
         let pairsData = {};
 
         // Initialize
@@ -476,12 +595,15 @@
             }
 
             const panel = document.getElementById('analysisPanel');
-            panel.innerHTML = '<div class="loading"><div class="spinner"></div>Analyzing ' + pair + ' (live)...</div>';
+            panel.innerHTML = '<button class="panel-close-btn" onclick="closeAnalysisPanel()">✕</button><div class="loading"><div class="spinner"></div>Analyzing ' + pair + ' (live, ' + selectedInterval + ')...</div>';
             panel.classList.add('active');
 
             try {
-                const analysis = await fetchLiveAnalysis(pair.toUpperCase(), apiKey);
-                displayAnalysis(pair.toUpperCase(), analysis);
+                const [analysis, confluence] = await Promise.all([
+                    fetchLiveAnalysis(pair.toUpperCase(), apiKey, selectedInterval),
+                    getMultiTimeframeConfluence(pair.toUpperCase(), apiKey)
+                ]);
+                displayAnalysis(pair.toUpperCase(), analysis, confluence);
             } catch (error) {
                 panel.innerHTML = `<div class="error">❌ ${error.message}</div>`;
             }
@@ -492,8 +614,8 @@
             return pair.slice(0, 3) + '/' + pair.slice(3);
         }
 
-        async function tdFetch(endpoint, symbol, apiKey, extra = '') {
-            const url = `https://api.twelvedata.com/${endpoint}?symbol=${encodeURIComponent(symbol)}&interval=1h&apikey=${apiKey}${extra}`;
+        async function tdFetch(endpoint, symbol, apiKey, interval, extra = '') {
+            const url = `https://api.twelvedata.com/${endpoint}?symbol=${encodeURIComponent(symbol)}&interval=${interval}&apikey=${apiKey}${extra}`;
             const res = await fetch(url);
             const data = await res.json();
             if (data.status === 'error' || data.code) {
@@ -502,16 +624,16 @@
             return data;
         }
 
-        async function fetchLiveAnalysis(pair, apiKey) {
+        async function fetchLiveAnalysis(pair, apiKey, interval) {
             const symbol = toTDSymbol(pair);
             const decimals = pair === 'XAUUSD' ? 2 : (pair === 'USDJPY' ? 3 : 5);
 
             const [quote, rsiData, macdData, supertrendData, atrData] = await Promise.all([
-                tdFetch('quote', symbol, apiKey),
-                tdFetch('rsi', symbol, apiKey, '&time_period=14'),
-                tdFetch('macd', symbol, apiKey),
-                tdFetch('supertrend', symbol, apiKey, '&period=10&multiplier=3'),
-                tdFetch('atr', symbol, apiKey, '&time_period=14')
+                tdFetch('quote', symbol, apiKey, interval),
+                tdFetch('rsi', symbol, apiKey, interval, '&time_period=14'),
+                tdFetch('macd', symbol, apiKey, interval),
+                tdFetch('supertrend', symbol, apiKey, interval, '&period=10&multiplier=3'),
+                tdFetch('atr', symbol, apiKey, interval, '&time_period=14')
             ]);
 
             const price = parseFloat(quote.close);
@@ -564,6 +686,33 @@
             };
         }
 
+        async function getMultiTimeframeConfluence(pair, apiKey) {
+            const symbol = toTDSymbol(pair);
+            const timeframes = [
+                { tf: '1min', label: '1 Minute' },
+                { tf: '5min', label: '5 Minute' },
+                { tf: '15min', label: '15 Minute' },
+                { tf: '30min', label: '30 Minute' },
+                { tf: '1h', label: '1 Hour' }
+            ];
+
+            const results = await Promise.all(
+                timeframes.map(async ({ tf, label }) => {
+                    try {
+                        const data = await tdFetch('supertrend', symbol, apiKey, tf, '&period=10&multiplier=3');
+                        const st = parseFloat(data.values?.[0]?.supertrend);
+                        const closePrice = parseFloat(data.values?.[0]?.close || st);
+                        const trend = closePrice > st ? 'BULLISH' : 'BEARISH';
+                        return { label, trend };
+                    } catch (e) {
+                        return { label, trend: 'N/A' };
+                    }
+                })
+            );
+
+            return results;
+        }
+
         function openSettings() {
             const existing = localStorage.getItem('td_api_key') || '';
             const key = prompt('TwelveData API Key daalo (twelvedata.com se free milti hai):', existing);
@@ -573,7 +722,7 @@
             }
         }
 
-        function displayAnalysis(pair, analysis) {
+        function displayAnalysis(pair, analysis, confluence = []) {
             const panel = document.getElementById('analysisPanel');
 
             const colors = {
@@ -584,8 +733,28 @@
             const colorKey = analysis.riskScore < 40 ? 'LOW' : analysis.riskScore < 70 ? 'MEDIUM' : 'HIGH';
             const riskText = analysis.riskScore < 40 ? 'Low Risk' : analysis.riskScore < 70 ? 'Medium Risk' : 'High Risk';
 
+            const bullishCount = confluence.filter(c => c.trend === 'BULLISH').length;
+            const bearishCount = confluence.filter(c => c.trend === 'BEARISH').length;
+            const confluenceSummary = bullishCount > bearishCount
+                ? `${bullishCount}/5 Bullish`
+                : bearishCount > bullishCount
+                    ? `${bearishCount}/5 Bearish`
+                    : 'Mixed';
+
+            const confluenceHTML = confluence.length ? `
+                <div class="confluence-table">
+                    ${confluence.map(c => `
+                        <div class="confluence-cell ${c.trend === 'BULLISH' ? 'bullish' : c.trend === 'BEARISH' ? 'bearish' : ''}">
+                            <span class="tf-label">${c.label}</span>
+                            <span class="tf-trend">${c.trend === 'BULLISH' ? '▲ BULLISH' : c.trend === 'BEARISH' ? '▼ BEARISH' : '— N/A'}</span>
+                        </div>
+                    `).join('')}
+                </div>
+            ` : '';
+
             // Rebuild the ENTIRE panel HTML fresh every time (panel gets wiped during loading state)
             panel.innerHTML = `
+                <button class="panel-close-btn" onclick="closeAnalysisPanel()">✕</button>
                 <div class="diagnosis-header">
                     <div class="diagnosis-title">${pair}</div>
                     <div class="risk-meter">
@@ -599,9 +768,12 @@
                     </div>
                 </div>
 
+                <div style="text-align:center; font-size:11px; color:#888; margin-bottom:6px;">Multi-Timeframe Trend (Supertrend)</div>
+                ${confluenceHTML}
+
                 <div id="analysisContent">
                     <div class="analysis-row">
-                        <span class="analysis-label">Supertrend (H1)</span>
+                        <span class="analysis-label">Supertrend (${selectedInterval.toUpperCase()})</span>
                         <span class="analysis-value ${analysis.supertrend === 'BULLISH' ? 'bullish' : 'bearish'}">${analysis.supertrend}</span>
                     </div>
                     <div class="analysis-row">
@@ -618,7 +790,7 @@
                     </div>
                     <div class="analysis-row" style="border-bottom: 2px solid rgba(255, 140, 0, 0.2); margin-bottom: 12px;">
                         <span class="analysis-label">Confluence</span>
-                        <span class="analysis-value">${analysis.supertrend === 'BULLISH' ? '↗️' : '↘️'} Multi-TF Aligned</span>
+                        <span class="analysis-value">${bullishCount > bearishCount ? '↗️' : bearishCount > bullishCount ? '↘️' : '↔️'} ${confluenceSummary}</span>
                     </div>
                     <div class="analysis-row">
                         <span class="analysis-label">📍 Entry Zone</span>
