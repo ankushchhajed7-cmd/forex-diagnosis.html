@@ -530,12 +530,18 @@
 
         <div style="display:flex; justify-content:space-between; align-items:center; margin: 20px 0 10px;">
             <span style="font-size:15px; font-weight:700; color:#FFB800;">📒 My Trades</span>
-            <button onclick="checkTradeResults()" style="padding:6px 14px; font-size:11px; background:rgba(0,255,150,0.15); color:#00FF96; border:1px solid rgba(0,255,150,0.4);">🔄 Check Results</button>
+            <span style="display:flex; gap:6px;">
+                <button onclick="openStatsWindow()" style="padding:6px 12px; font-size:11px; background:rgba(255,184,0,0.15); color:#FFB800; border:1px solid rgba(255,184,0,0.4);">📊 Stats</button>
+                <button onclick="checkTradeResults()" style="padding:6px 12px; font-size:11px; background:rgba(0,255,150,0.15); color:#00FF96; border:1px solid rgba(0,255,150,0.4);">🔄 Check Results</button>
+            </span>
         </div>
         <div id="tradeStats" style="display:none; gap:8px; margin-bottom:10px;"></div>
         <div id="tradesList"></div>
 
         <div id="analysisPanel" class="analysis-panel"></div>
+
+        <div id="statsWindow" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:#0d0d0d; z-index:1100; overflow-y:auto; font-family:'Courier New', monospace; padding:16px; padding-top:54px;"></div>
+        <input type="file" id="importFile" accept=".json" style="display:none" onchange="importTrades(event)">
 
         <div class="info-text">
             API by TwelveData | Markets Live
@@ -958,7 +964,7 @@
                 closeTime: null
             };
             trades.unshift(trade);
-            trades.splice(50); // keep last 50
+            trades.splice(100); // keep last 100
             saveTrades(trades);
             alert('✅ Trade record ho gaya! Dashboard pe "My Trades" me dikhega.');
             closeAnalysisPanel();
@@ -977,11 +983,25 @@
                 return;
             }
 
-            // Stats
-            const closed = trades.filter(t => t.status === 'CLOSED');
+            const now = new Date();
+            const currentMonthKey = `${now.getFullYear()}-${now.getMonth()}`;
+            const monthKey = t => {
+                const d = new Date(t.openTime);
+                return `${d.getFullYear()}-${d.getMonth()}`;
+            };
+            const monthLabel = t => {
+                const d = new Date(t.openTime);
+                return d.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+            };
+
+            const currentMonthTrades = trades.filter(t => monthKey(t) === currentMonthKey);
+            const olderTrades = trades.filter(t => monthKey(t) !== currentMonthKey);
+
+            // Stats bar = CURRENT MONTH only
+            const closed = currentMonthTrades.filter(t => t.status === 'CLOSED');
             const wins = closed.filter(t => t.result === 'TP HIT').length;
             const losses = closed.filter(t => t.result === 'SL HIT').length;
-            const openCount = trades.filter(t => t.status === 'OPEN').length;
+            const openCount = currentMonthTrades.filter(t => t.status === 'OPEN').length;
             const winRate = closed.length ? ((wins / closed.length) * 100).toFixed(0) : '--';
 
             statsDiv.style.display = 'flex';
@@ -1004,38 +1024,254 @@
                 </div>
             `;
 
-            list.innerHTML = trades.map(t => {
-                const d = new Date(t.openTime);
-                const dateStr = d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) + ' ' + d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
-                const statusBadge = t.status === 'OPEN'
-                    ? '<span style="color:#FFB800; font-weight:700;">⏳ OPEN</span>'
-                    : t.result === 'TP HIT'
-                        ? '<span style="color:#00FF96; font-weight:700;">✅ TP HIT</span>'
-                        : '<span style="color:#FF4444; font-weight:700;">❌ SL HIT</span>';
-                const sigColor = t.signal === 'BUY' ? '#00FF96' : '#FF4444';
-                return `
-                <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,140,0,0.2); border-radius:10px; padding:12px; margin-bottom:8px;">
-                    <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
-                        <span style="font-weight:700; color:#FFB800;">${t.pair} <span style="color:${sigColor}; font-size:11px;">${t.signal}</span></span>
-                        ${statusBadge}
-                    </div>
-                    <div style="display:flex; justify-content:space-between; font-size:11px; color:#aaa;">
-                        <span>E: ${t.entry}</span>
-                        <span>SL: ${t.sl}</span>
-                        <span>TP: ${t.tp}</span>
-                    </div>
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px;">
-                        <span style="font-size:10px; color:#666;">${dateStr}</span>
-                        <button onclick="deleteTrade(${t.id})" style="padding:2px 8px; font-size:9px; background:rgba(255,68,68,0.15); color:#FF8888; border:1px solid rgba(255,68,68,0.3); border-radius:6px;">🗑️</button>
-                    </div>
-                </div>`;
-            }).join('');
+            // Current month: full trade cards
+            const currentMonthName = now.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+            let html = `<div style="font-size:12px; font-weight:700; color:#00FF96; margin:6px 0 8px;">📅 ${currentMonthName} (This Month)</div>`;
+
+            if (currentMonthTrades.length === 0) {
+                html += '<div style="text-align:center; padding:12px; color:#666; font-size:11px;">Is month abhi koi trade nahi.</div>';
+            } else {
+                html += currentMonthTrades.map(t => {
+                    const d = new Date(t.openTime);
+                    const dateStr = d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) + ' ' + d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+                    const statusBadge = t.status === 'OPEN'
+                        ? '<span style="color:#FFB800; font-weight:700;">⏳ OPEN</span>'
+                        : t.result === 'TP HIT'
+                            ? '<span style="color:#00FF96; font-weight:700;">✅ TP HIT</span>'
+                            : '<span style="color:#FF4444; font-weight:700;">❌ SL HIT</span>';
+                    const sigColor = t.signal === 'BUY' ? '#00FF96' : '#FF4444';
+                    return `
+                    <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,140,0,0.2); border-radius:10px; padding:12px; margin-bottom:8px;">
+                        <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+                            <span style="font-weight:700; color:#FFB800;">${t.pair} <span style="color:${sigColor}; font-size:11px;">${t.signal}</span></span>
+                            ${statusBadge}
+                        </div>
+                        <div style="display:flex; justify-content:space-between; font-size:11px; color:#aaa;">
+                            <span>E: ${t.entry}</span>
+                            <span>SL: ${t.sl}</span>
+                            <span>TP: ${t.tp}</span>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px;">
+                            <span style="font-size:10px; color:#666;">${dateStr}</span>
+                            <button onclick="deleteTrade(${t.id})" style="padding:2px 8px; font-size:9px; background:rgba(255,68,68,0.15); color:#FF8888; border:1px solid rgba(255,68,68,0.3); border-radius:6px;">🗑️</button>
+                        </div>
+                    </div>`;
+                }).join('');
+            }
+
+            // Older months: compact summary only (TP/SL/win rate per month)
+            if (olderTrades.length > 0) {
+                const monthGroups = {};
+                olderTrades.forEach(t => {
+                    const key = monthKey(t);
+                    if (!monthGroups[key]) monthGroups[key] = { label: monthLabel(t), trades: [] };
+                    monthGroups[key].trades.push(t);
+                });
+
+                html += `<div style="font-size:12px; font-weight:700; color:#888; margin:16px 0 8px;">📁 Previous Months (Summary)</div>`;
+
+                // Sort newest month first
+                Object.keys(monthGroups).sort().reverse().forEach(key => {
+                    const g = monthGroups[key];
+                    const mClosed = g.trades.filter(t => t.status === 'CLOSED');
+                    const mWins = mClosed.filter(t => t.result === 'TP HIT').length;
+                    const mLosses = mClosed.filter(t => t.result === 'SL HIT').length;
+                    const mOpen = g.trades.filter(t => t.status === 'OPEN').length;
+                    const mRate = mClosed.length ? ((mWins / mClosed.length) * 100).toFixed(0) + '%' : '--';
+                    html += `
+                    <div style="background:rgba(255,255,255,0.02); border:1px solid rgba(255,140,0,0.15); border-radius:10px; padding:12px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
+                        <span style="font-weight:600; color:#ccc; font-size:12px;">${g.label}</span>
+                        <span style="font-size:11px;">
+                            <span style="color:#00FF96;">✅ ${mWins}</span> &nbsp;
+                            <span style="color:#FF4444;">❌ ${mLosses}</span> &nbsp;
+                            ${mOpen > 0 ? `<span style="color:#FFB800;">⏳ ${mOpen}</span> &nbsp;` : ''}
+                            <span style="color:#e0e0e0; font-weight:700;">${mRate}</span>
+                        </span>
+                    </div>`;
+                });
+            }
+
+            list.innerHTML = html;
         }
 
         function deleteTrade(id) {
             if (!confirm('Ye trade delete karna hai?')) return;
             saveTrades(getTrades().filter(t => t.id !== id));
             renderTrades();
+        }
+
+        // ===== Terminal-Style Stats Window =====
+        function openStatsWindow() {
+            const win = document.getElementById('statsWindow');
+            win.innerHTML = buildStatsHTML();
+            win.style.display = 'block';
+        }
+
+        function closeStatsWindow() {
+            document.getElementById('statsWindow').style.display = 'none';
+        }
+
+        function buildStatsHTML() {
+            const trades = getTrades();
+            const closed = trades.filter(t => t.status === 'CLOSED');
+            const wins = closed.filter(t => t.result === 'TP HIT').length;
+            const losses = closed.filter(t => t.result === 'SL HIT').length;
+            const pending = trades.filter(t => t.status === 'OPEN').length;
+            const acc = closed.length ? ((wins / closed.length) * 100).toFixed(0) : 0;
+            // Expectancy with RRR 2:1 → win gives +2R, loss gives -1R
+            const expectancy = closed.length ? (((wins * 2) - losses) / closed.length).toFixed(2) : '0.00';
+
+            const A = '#FFB800'; // amber
+            const box = `background:#141414; border:1px solid #2a2a2a; border-radius:8px;`;
+            const statBox = (val, label, color = A) => `
+                <div style="${box} flex:1; text-align:center; padding:16px 4px;">
+                    <div style="font-size:24px; font-weight:700; color:${color};">${val}</div>
+                    <div style="font-size:10px; color:#777; letter-spacing:2px; margin-top:4px;">${label}</div>
+                </div>`;
+
+            // Pair-wise stats
+            const pairMap = {};
+            trades.forEach(t => {
+                if (!pairMap[t.pair]) pairMap[t.pair] = { total: 0, tp: 0, sl: 0 };
+                pairMap[t.pair].total++;
+                if (t.result === 'TP HIT') pairMap[t.pair].tp++;
+                if (t.result === 'SL HIT') pairMap[t.pair].sl++;
+            });
+            const pairRows = Object.keys(pairMap).map(p => {
+                const s = pairMap[p];
+                const pClosed = s.tp + s.sl;
+                const pAcc = pClosed ? ((s.tp / pClosed) * 100).toFixed(0) + '%' : '—';
+                return `<tr style="border-bottom:1px solid #222;">
+                    <td style="padding:10px 4px; color:#eee; font-weight:700;">${p}</td>
+                    <td style="padding:10px 4px; text-align:center; color:#ccc;">${s.total}</td>
+                    <td style="padding:10px 4px; text-align:center; color:#00FF96;">${s.tp}</td>
+                    <td style="padding:10px 4px; text-align:center; color:#FF4444;">${s.sl}</td>
+                    <td style="padding:10px 4px; text-align:center; color:${A};">${pAcc}</td>
+                </tr>`;
+            }).join('') || `<tr><td colspan="5" style="padding:14px; color:#666;">Abhi koi trade nahi</td></tr>`;
+
+            // Monthly stats
+            const monthMap = {};
+            trades.forEach(t => {
+                const d = new Date(t.openTime);
+                const key = `${d.getFullYear()}-${String(d.getMonth()).padStart(2, '0')}`;
+                const label = d.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' });
+                if (!monthMap[key]) monthMap[key] = { label, total: 0, tp: 0, sl: 0 };
+                monthMap[key].total++;
+                if (t.result === 'TP HIT') monthMap[key].tp++;
+                if (t.result === 'SL HIT') monthMap[key].sl++;
+            });
+            const monthRows = Object.keys(monthMap).sort().reverse().map(k => {
+                const m = monthMap[k];
+                const mClosed = m.tp + m.sl;
+                const mAcc = mClosed ? ((m.tp / mClosed) * 100).toFixed(0) + '%' : '—';
+                return `<tr style="border-bottom:1px solid #222;">
+                    <td style="padding:10px 4px; color:#eee;">${m.label}</td>
+                    <td style="padding:10px 4px; text-align:center; color:#ccc;">${m.total}</td>
+                    <td style="padding:10px 4px; text-align:center; color:#00FF96;">${m.tp}</td>
+                    <td style="padding:10px 4px; text-align:center; color:#FF4444;">${m.sl}</td>
+                    <td style="padding:10px 4px; text-align:center; color:${A};">${mAcc}</td>
+                </tr>`;
+            }).join('') || `<tr><td colspan="5" style="padding:14px; color:#666;">Abhi koi closed trade nahi</td></tr>`;
+
+            const th = `padding:8px 4px; font-size:10px; color:#777; letter-spacing:2px; text-align:center; border-bottom:1px solid #333;`;
+
+            return `
+                <button onclick="closeStatsWindow()" style="position:fixed; top:12px; right:12px; z-index:1101; width:36px; height:36px; border-radius:50%; background:#1a1a1a; border:1px solid ${A}; color:${A}; font-size:16px;">✕</button>
+
+                <div style="${box} padding:16px; margin-bottom:14px;">
+                    <div style="font-size:20px; font-weight:700; color:${A}; letter-spacing:3px; margin-bottom:6px;">PERFORMANCE</div>
+                    <div style="font-size:11px; color:#777; margin-bottom:14px;">Accuracy = TP / (TP+SL). Trade record karke "Check Results" se auto-update hota hai.</div>
+                    <div style="display:flex; gap:8px; margin-bottom:8px;">
+                        ${statBox(closed.length, 'CLOSED')}
+                        ${statBox(acc + '%', 'ACCURACY')}
+                        ${statBox(expectancy + 'R', 'EXPECTANCY')}
+                    </div>
+                    <div style="display:flex; gap:8px;">
+                        ${statBox(wins, 'TP HIT', '#00FF96')}
+                        ${statBox(losses, 'SL HIT', '#FF4444')}
+                        ${statBox(pending, 'PENDING')}
+                    </div>
+                </div>
+
+                <div style="${box} padding:16px; margin-bottom:14px;">
+                    <div style="font-size:20px; font-weight:700; color:${A}; letter-spacing:3px; margin-bottom:10px;">PAIR-WISE</div>
+                    <table style="width:100%; border-collapse:collapse; font-size:13px;">
+                        <tr>
+                            <th style="${th} text-align:left;">PAIR</th>
+                            <th style="${th}">TRADES</th>
+                            <th style="${th}">TP</th>
+                            <th style="${th}">SL</th>
+                            <th style="${th}">ACC%</th>
+                        </tr>
+                        ${pairRows}
+                    </table>
+                </div>
+
+                <div style="${box} padding:16px; margin-bottom:14px;">
+                    <div style="font-size:20px; font-weight:700; color:${A}; letter-spacing:3px; margin-bottom:10px;">MONTHLY</div>
+                    <table style="width:100%; border-collapse:collapse; font-size:13px;">
+                        <tr>
+                            <th style="${th} text-align:left;">MONTH</th>
+                            <th style="${th}">TRADES</th>
+                            <th style="${th}">TP</th>
+                            <th style="${th}">SL</th>
+                            <th style="${th}">ACC%</th>
+                        </tr>
+                        ${monthRows}
+                    </table>
+                </div>
+
+                <div style="${box} padding:16px; margin-bottom:20px;">
+                    <div style="font-size:20px; font-weight:700; color:${A}; letter-spacing:3px; margin-bottom:10px;">BACKUP</div>
+                    <div style="font-size:11px; color:#777; margin-bottom:12px;">Trade history JSON file me export karo. Phone change ya cache clear se pehle backup zaroor lo.</div>
+                    <div style="display:flex; gap:10px;">
+                        <button onclick="exportTrades()" style="flex:1; padding:12px; background:#1a1a1a; color:#00FF96; border:1px solid rgba(0,255,150,0.4); border-radius:8px; font-family:inherit; font-weight:700;">⬇ EXPORT</button>
+                        <button onclick="document.getElementById('importFile').click()" style="flex:1; padding:12px; background:#1a1a1a; color:${A}; border:1px solid rgba(255,184,0,0.4); border-radius:8px; font-family:inherit; font-weight:700;">⬆ IMPORT</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        // ===== Backup / Restore =====
+        function exportTrades() {
+            const trades = getTrades();
+            if (trades.length === 0) return alert('Koi trade nahi hai export karne ke liye.');
+            const blob = new Blob([JSON.stringify(trades, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            const dateStr = new Date().toISOString().slice(0, 10);
+            a.href = url;
+            a.download = `forex-trades-backup-${dateStr}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function importTrades(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const imported = JSON.parse(e.target.result);
+                    if (!Array.isArray(imported)) throw new Error('Invalid format');
+
+                    const existing = getTrades();
+                    const existingIds = new Set(existing.map(t => t.id));
+                    const newTrades = imported.filter(t => t.id && !existingIds.has(t.id));
+
+                    const merged = [...existing, ...newTrades].sort((a, b) => b.id - a.id);
+                    merged.splice(100);
+                    saveTrades(merged);
+                    renderTrades();
+                    openStatsWindow(); // refresh stats view
+                    alert(`✅ ${newTrades.length} naye trade(s) import hue! (Duplicates skip kiye)`);
+                } catch (err) {
+                    alert('❌ File galat hai - sirf is app se export ki hui JSON file use karo.');
+                }
+                event.target.value = '';
+            };
+            reader.readAsText(file);
         }
 
         async function checkTradeResults() {
