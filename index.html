@@ -1053,12 +1053,20 @@
             for (const trade of openTrades) {
                 try {
                     const symbol = toTDSymbol(trade.pair);
-                    // Fetch 5min candles since trade open to scan highs/lows chronologically
-                    const startDate = new Date(trade.openTime).toISOString().slice(0, 19);
-                    const data = await tdFetch('time_series', symbol, apiKey, '5min', `&start_date=${encodeURIComponent(startDate)}&outputsize=500&order=ASC`);
+                    // Fetch 5min candles since trade open - FORCE UTC timezone so start_date
+                    // and candle datetimes match our stored UTC openTime exactly
+                    const openMs = new Date(trade.openTime).getTime();
+                    const startDate = new Date(trade.openTime).toISOString().slice(0, 19).replace('T', ' ');
+                    const data = await tdFetch('time_series', symbol, apiKey, '5min', `&start_date=${encodeURIComponent(startDate)}&outputsize=500&order=ASC&timezone=UTC`);
                     const candles = data.values || [];
 
                     for (const c of candles) {
+                        // Safety: skip any candle that OPENED before the trade was taken.
+                        // This also skips the in-progress candle at entry time, so pre-entry
+                        // price wicks can never falsely trigger SL/TP.
+                        const candleMs = new Date(c.datetime.replace(' ', 'T') + 'Z').getTime();
+                        if (isNaN(candleMs) || candleMs < openMs) continue;
+
                         const high = parseFloat(c.high);
                         const low = parseFloat(c.low);
                         let result = null;
