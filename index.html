@@ -708,14 +708,15 @@
             const rrr = '2.0';
 
             const entryZone = price;
-            let slZone, tpZone;
+            let slZone = null, tpZone = null;
             if (signal === 'SELL') {
                 slZone = entryZone + atr * 1.5;
                 tpZone = entryZone - atr * 1.5 * parseFloat(rrr);
-            } else {
+            } else if (signal === 'BUY') {
                 slZone = entryZone - atr * 1.5;
                 tpZone = entryZone + atr * 1.5 * parseFloat(rrr);
             }
+            // HOLD = no trade zones, direction unclear
 
             return {
                 signal,
@@ -727,9 +728,9 @@
                 macd: macdSignal,
                 atrHigh: atr,
                 rrr,
-                entryZone: entryZone.toFixed(decimals),
-                slZone: slZone.toFixed(decimals),
-                tpZone: tpZone.toFixed(decimals)
+                entryZone: signal === 'HOLD' ? null : entryZone.toFixed(decimals),
+                slZone: slZone !== null ? slZone.toFixed(decimals) : null,
+                tpZone: tpZone !== null ? tpZone.toFixed(decimals) : null
             };
         }
 
@@ -850,6 +851,12 @@
                         <span class="analysis-label">Confluence</span>
                         <span class="analysis-value">${bullishCount > bearishCount ? '↗️' : bearishCount > bullishCount ? '↘️' : '↔️'} ${confluenceSummary}</span>
                     </div>
+                    ${analysis.signal === 'HOLD' ? `
+                    <div style="text-align:center; padding:16px; background:rgba(255,184,0,0.08); border:1px solid rgba(255,184,0,0.25); border-radius:10px; margin-top:4px;">
+                        <div style="font-size:14px; color:#FFB800; font-weight:600; margin-bottom:4px;">⏳ No Trade Zone</div>
+                        <div style="font-size:11px; color:#888;">Indicators disagree kar rahe hain (Supertrend vs MACD). Clear BUY/SELL signal ka wait karo - tab Entry/SL/TP milega.</div>
+                    </div>
+                    ` : `
                     <div class="analysis-row">
                         <span class="analysis-label">📍 Entry Zone</span>
                         <span class="analysis-value" style="color: #FFB800;">${analysis.entryZone}</span>
@@ -862,6 +869,7 @@
                         <span class="analysis-label">🎯 TP Zone</span>
                         <span class="analysis-value" style="color: #00FF96;">${analysis.tpZone}</span>
                     </div>
+                    `}
                 </div>
 
                 <div class="action-buttons">
@@ -881,7 +889,10 @@
         function shareWhatsApp() {
             if (!window.lastAnalysis) return;
             const a = window.lastAnalysis;
-            const text = `🤖 *${a.pair} Analysis*\n\n📊 Signal: *${a.signal}*\nRisk Score: ${a.riskScore}/100\nConfidence: ${a.confidence}%\n\n📍 Entry: ${a.entryZone}\n🛑 SL: ${a.slZone}\n🎯 TP: ${a.tpZone}\n\nRRR: ${a.rrr}:1\n\n*ForexDiagnosis*\nAI-Powered Analysis`;
+            const zones = a.signal === 'HOLD'
+                ? '\n⏳ No trade zone - wait for clear signal'
+                : `\n📍 Entry: ${a.entryZone}\n🛑 SL: ${a.slZone}\n🎯 TP: ${a.tpZone}\n\nRRR: ${a.rrr}:1`;
+            const text = `🤖 *${a.pair} Analysis*\n\n📊 Signal: *${a.signal}*\nRisk Score: ${a.riskScore}/100\nConfidence: ${a.confidence}%\n${zones}\n\n*ForexDiagnosis*\nAI-Powered Analysis`;
             const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
             window.open(url, '_blank');
         }
