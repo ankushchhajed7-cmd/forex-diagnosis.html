@@ -528,6 +528,13 @@
 
         <div id="pairsContainer" class="pairs-container"></div>
 
+        <div style="display:flex; justify-content:space-between; align-items:center; margin: 20px 0 10px;">
+            <span style="font-size:15px; font-weight:700; color:#FFB800;">📒 My Trades</span>
+            <button onclick="checkTradeResults()" style="padding:6px 14px; font-size:11px; background:rgba(0,255,150,0.15); color:#00FF96; border:1px solid rgba(0,255,150,0.4);">🔄 Check Results</button>
+        </div>
+        <div id="tradeStats" style="display:none; gap:8px; margin-bottom:10px;"></div>
+        <div id="tradesList"></div>
+
         <div id="analysisPanel" class="analysis-panel"></div>
 
         <div class="info-text">
@@ -559,6 +566,7 @@
         document.addEventListener('DOMContentLoaded', () => {
             renderPairCards();
             loadCachedData();
+            renderTrades();
         });
 
         function renderPairCards() {
@@ -876,6 +884,11 @@
                     <button class="btn-secondary" onclick="shareWhatsApp()">📱 Share</button>
                     <button class="btn-secondary" onclick="savAnalysis()">💾 Save</button>
                 </div>
+                ${analysis.signal !== 'HOLD' ? `
+                <button onclick="recordTrade()" style="width:100%; margin-top:10px; padding:14px; background: linear-gradient(135deg, #00FF96 0%, #00CC7A 100%); color:#000; font-weight:700; font-size:14px;">
+                    ✅ Maine Ye Trade Liya
+                </button>
+                ` : ''}
 
                 <div class="free-badge">✨ INSTANT ANALYSIS</div>
             `;
@@ -915,6 +928,167 @@
         function loadCachedData() {
             const saved = JSON.parse(localStorage.getItem('forexDiagnosis') || '[]');
             // Could display recent analyses here
+        }
+
+        // ===== Trade Tracker =====
+        function getTrades() {
+            return JSON.parse(localStorage.getItem('myTrades') || '[]');
+        }
+
+        function saveTrades(trades) {
+            localStorage.setItem('myTrades', JSON.stringify(trades));
+        }
+
+        function recordTrade() {
+            if (!window.lastAnalysis) return;
+            const a = window.lastAnalysis;
+            if (a.signal === 'HOLD') return alert('HOLD signal pe trade record nahi hota');
+
+            const trades = getTrades();
+            const trade = {
+                id: Date.now(),
+                pair: a.pair,
+                signal: a.signal,
+                entry: parseFloat(a.entryZone),
+                sl: parseFloat(a.slZone),
+                tp: parseFloat(a.tpZone),
+                openTime: new Date().toISOString(),
+                status: 'OPEN',
+                result: null,
+                closeTime: null
+            };
+            trades.unshift(trade);
+            trades.splice(50); // keep last 50
+            saveTrades(trades);
+            alert('✅ Trade record ho gaya! Dashboard pe "My Trades" me dikhega.');
+            closeAnalysisPanel();
+            renderTrades();
+        }
+
+        function renderTrades() {
+            const trades = getTrades();
+            const list = document.getElementById('tradesList');
+            const statsDiv = document.getElementById('tradeStats');
+            if (!list) return;
+
+            if (trades.length === 0) {
+                list.innerHTML = '<div style="text-align:center; padding:16px; color:#666; font-size:12px;">Abhi koi trade record nahi hai. Analysis me "✅ Maine Ye Trade Liya" dabao.</div>';
+                statsDiv.style.display = 'none';
+                return;
+            }
+
+            // Stats
+            const closed = trades.filter(t => t.status === 'CLOSED');
+            const wins = closed.filter(t => t.result === 'TP HIT').length;
+            const losses = closed.filter(t => t.result === 'SL HIT').length;
+            const openCount = trades.filter(t => t.status === 'OPEN').length;
+            const winRate = closed.length ? ((wins / closed.length) * 100).toFixed(0) : '--';
+
+            statsDiv.style.display = 'flex';
+            statsDiv.innerHTML = `
+                <div style="flex:1; text-align:center; padding:10px; background:rgba(0,255,150,0.08); border:1px solid rgba(0,255,150,0.25); border-radius:8px;">
+                    <div style="font-size:16px; font-weight:700; color:#00FF96;">${wins}</div>
+                    <div style="font-size:9px; color:#888;">TP HIT</div>
+                </div>
+                <div style="flex:1; text-align:center; padding:10px; background:rgba(255,68,68,0.08); border:1px solid rgba(255,68,68,0.25); border-radius:8px;">
+                    <div style="font-size:16px; font-weight:700; color:#FF4444;">${losses}</div>
+                    <div style="font-size:9px; color:#888;">SL HIT</div>
+                </div>
+                <div style="flex:1; text-align:center; padding:10px; background:rgba(255,184,0,0.08); border:1px solid rgba(255,184,0,0.25); border-radius:8px;">
+                    <div style="font-size:16px; font-weight:700; color:#FFB800;">${openCount}</div>
+                    <div style="font-size:9px; color:#888;">OPEN</div>
+                </div>
+                <div style="flex:1; text-align:center; padding:10px; background:rgba(255,255,255,0.04); border:1px solid rgba(255,140,0,0.25); border-radius:8px;">
+                    <div style="font-size:16px; font-weight:700; color:#e0e0e0;">${winRate}%</div>
+                    <div style="font-size:9px; color:#888;">WIN RATE</div>
+                </div>
+            `;
+
+            list.innerHTML = trades.map(t => {
+                const d = new Date(t.openTime);
+                const dateStr = d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) + ' ' + d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+                const statusBadge = t.status === 'OPEN'
+                    ? '<span style="color:#FFB800; font-weight:700;">⏳ OPEN</span>'
+                    : t.result === 'TP HIT'
+                        ? '<span style="color:#00FF96; font-weight:700;">✅ TP HIT</span>'
+                        : '<span style="color:#FF4444; font-weight:700;">❌ SL HIT</span>';
+                const sigColor = t.signal === 'BUY' ? '#00FF96' : '#FF4444';
+                return `
+                <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,140,0,0.2); border-radius:10px; padding:12px; margin-bottom:8px;">
+                    <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+                        <span style="font-weight:700; color:#FFB800;">${t.pair} <span style="color:${sigColor}; font-size:11px;">${t.signal}</span></span>
+                        ${statusBadge}
+                    </div>
+                    <div style="display:flex; justify-content:space-between; font-size:11px; color:#aaa;">
+                        <span>E: ${t.entry}</span>
+                        <span>SL: ${t.sl}</span>
+                        <span>TP: ${t.tp}</span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px;">
+                        <span style="font-size:10px; color:#666;">${dateStr}</span>
+                        <button onclick="deleteTrade(${t.id})" style="padding:2px 8px; font-size:9px; background:rgba(255,68,68,0.15); color:#FF8888; border:1px solid rgba(255,68,68,0.3); border-radius:6px;">🗑️</button>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        function deleteTrade(id) {
+            if (!confirm('Ye trade delete karna hai?')) return;
+            saveTrades(getTrades().filter(t => t.id !== id));
+            renderTrades();
+        }
+
+        async function checkTradeResults() {
+            const apiKey = localStorage.getItem('td_api_key');
+            if (!apiKey) return openSettings();
+
+            const trades = getTrades();
+            const openTrades = trades.filter(t => t.status === 'OPEN');
+            if (openTrades.length === 0) return alert('Koi OPEN trade nahi hai check karne ke liye.');
+
+            const btn = event?.target;
+            if (btn) { btn.textContent = '⏳ Checking...'; btn.disabled = true; }
+
+            let updated = 0;
+            for (const trade of openTrades) {
+                try {
+                    const symbol = toTDSymbol(trade.pair);
+                    // Fetch 5min candles since trade open to scan highs/lows chronologically
+                    const startDate = new Date(trade.openTime).toISOString().slice(0, 19);
+                    const data = await tdFetch('time_series', symbol, apiKey, '5min', `&start_date=${encodeURIComponent(startDate)}&outputsize=500&order=ASC`);
+                    const candles = data.values || [];
+
+                    for (const c of candles) {
+                        const high = parseFloat(c.high);
+                        const low = parseFloat(c.low);
+                        let result = null;
+
+                        if (trade.signal === 'BUY') {
+                            // Whichever hits first in this candle: conservative = SL first if both touched
+                            if (low <= trade.sl) result = 'SL HIT';
+                            else if (high >= trade.tp) result = 'TP HIT';
+                        } else { // SELL
+                            if (high >= trade.sl) result = 'SL HIT';
+                            else if (low <= trade.tp) result = 'TP HIT';
+                        }
+
+                        if (result) {
+                            trade.status = 'CLOSED';
+                            trade.result = result;
+                            trade.closeTime = c.datetime;
+                            updated++;
+                            break;
+                        }
+                    }
+                } catch (e) {
+                    console.log('Check failed for', trade.pair, e.message);
+                }
+            }
+
+            saveTrades(trades);
+            renderTrades();
+            if (btn) { btn.textContent = '🔄 Check Results'; btn.disabled = false; }
+            alert(updated > 0 ? `✅ ${updated} trade(s) ka result update hua!` : 'Abhi koi trade TP/SL tak nahi pahucha - sab OPEN hain.');
         }
 
         // ===== PWA Install & Service Worker =====
