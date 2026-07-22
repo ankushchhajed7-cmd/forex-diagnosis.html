@@ -721,12 +721,17 @@
             const riskScore = rsiSignal !== 'NEUTRAL' ? 70 : (signal === 'HOLD' ? 55 : 35);
             const rrr = '2.0';
 
-            const entryZone = price;
-            let slZone = null, tpZone = null;
+            // PULLBACK LIMIT ENTRY: 0.5 ATR better than current price
+            // BUY → Buy Limit BELOW current | SELL → Sell Limit ABOVE current
+            let entryZone = null, slZone = null, tpZone = null, orderType = null;
             if (signal === 'SELL') {
+                orderType = 'SELL LIMIT';
+                entryZone = price + atr * 0.5;
                 slZone = entryZone + atr * 1.5;
                 tpZone = entryZone - atr * 1.5 * parseFloat(rrr);
             } else if (signal === 'BUY') {
+                orderType = 'BUY LIMIT';
+                entryZone = price - atr * 0.5;
                 slZone = entryZone - atr * 1.5;
                 tpZone = entryZone + atr * 1.5 * parseFloat(rrr);
             }
@@ -734,6 +739,8 @@
 
             return {
                 signal,
+                orderType,
+                currentPrice: price.toFixed(decimals),
                 riskScore,
                 confidence,
                 supertrend,
@@ -742,7 +749,7 @@
                 macd: macdSignal,
                 atrHigh: atr,
                 rrr,
-                entryZone: signal === 'HOLD' ? null : entryZone.toFixed(decimals),
+                entryZone: entryZone !== null ? entryZone.toFixed(decimals) : null,
                 slZone: slZone !== null ? slZone.toFixed(decimals) : null,
                 tpZone: tpZone !== null ? tpZone.toFixed(decimals) : null
             };
@@ -871,8 +878,17 @@
                         <div style="font-size:11px; color:#888;">Indicators disagree kar rahe hain (Supertrend vs MACD). Clear BUY/SELL signal ka wait karo - tab Entry/SL/TP milega.</div>
                     </div>
                     ` : `
+                    <div style="text-align:center; margin:8px 0;">
+                        <span style="display:inline-block; padding:6px 16px; background:${analysis.signal === 'BUY' ? 'rgba(0,255,150,0.15)' : 'rgba(255,68,68,0.15)'}; border:1px solid ${analysis.signal === 'BUY' ? 'rgba(0,255,150,0.5)' : 'rgba(255,68,68,0.5)'}; border-radius:20px; font-weight:700; font-size:13px; color:${analysis.signal === 'BUY' ? '#00FF96' : '#FF4444'};">
+                            📋 ${analysis.orderType}
+                        </span>
+                    </div>
                     <div class="analysis-row">
-                        <span class="analysis-label">📍 Entry Zone</span>
+                        <span class="analysis-label">💹 Current Price</span>
+                        <span class="analysis-value">${analysis.currentPrice}</span>
+                    </div>
+                    <div class="analysis-row">
+                        <span class="analysis-label">📍 Entry (Limit)</span>
                         <span class="analysis-value" style="color: #FFB800;">${analysis.entryZone}</span>
                     </div>
                     <div class="analysis-row">
@@ -910,7 +926,7 @@
             const a = window.lastAnalysis;
             const zones = a.signal === 'HOLD'
                 ? '\n⏳ No trade zone - wait for clear signal'
-                : `\n📍 Entry: ${a.entryZone}\n🛑 SL: ${a.slZone}\n🎯 TP: ${a.tpZone}\n\nRRR: ${a.rrr}:1`;
+                : `\n📋 Order: *${a.orderType}*\n💹 Current: ${a.currentPrice}\n📍 Entry: ${a.entryZone}\n🛑 SL: ${a.slZone}\n🎯 TP: ${a.tpZone}\n\nRRR: ${a.rrr}:1`;
             const text = `🤖 *${a.pair} Analysis*\n\n📊 Signal: *${a.signal}*\nRisk Score: ${a.riskScore}/100\nConfidence: ${a.confidence}%\n${zones}\n\n*ForexDiagnosis*\nAI-Powered Analysis`;
             const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
             window.open(url, '_blank');
@@ -955,11 +971,13 @@
                 id: Date.now(),
                 pair: a.pair,
                 signal: a.signal,
+                orderType: a.orderType || (a.signal + ' LIMIT'),
                 entry: parseFloat(a.entryZone),
                 sl: parseFloat(a.slZone),
                 tp: parseFloat(a.tpZone),
                 openTime: new Date().toISOString(),
                 status: 'OPEN',
+                filled: false,
                 result: null,
                 closeTime: null
             };
@@ -1035,7 +1053,9 @@
                     const d = new Date(t.openTime);
                     const dateStr = d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) + ' ' + d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
                     const statusBadge = t.status === 'OPEN'
-                        ? '<span style="color:#FFB800; font-weight:700;">⏳ OPEN</span>'
+                        ? (t.filled
+                            ? '<span style="color:#00CCFF; font-weight:700;">▶ RUNNING</span>'
+                            : '<span style="color:#FFB800; font-weight:700;">⏳ WAITING FILL</span>')
                         : t.result === 'TP HIT'
                             ? '<span style="color:#00FF96; font-weight:700;">✅ TP HIT</span>'
                             : '<span style="color:#FF4444; font-weight:700;">❌ SL HIT</span>';
@@ -1298,17 +1318,31 @@
 
                     for (const c of candles) {
                         // Safety: skip any candle that OPENED before the trade was taken.
-                        // This also skips the in-progress candle at entry time, so pre-entry
-                        // price wicks can never falsely trigger SL/TP.
                         const candleMs = new Date(c.datetime.replace(' ', 'T') + 'Z').getTime();
                         if (isNaN(candleMs) || candleMs < openMs) continue;
 
                         const high = parseFloat(c.high);
                         const low = parseFloat(c.low);
-                        let result = null;
 
+                        // PHASE 1: Limit order fill check (price must touch entry first)
+                        if (!trade.filled) {
+                            const touchedEntry = trade.signal === 'BUY'
+                                ? low <= trade.entry   // Buy Limit fills when price dips to entry
+                                : high >= trade.entry; // Sell Limit fills when price rises to entry
+                            if (touchedEntry) {
+                                trade.filled = true;
+                                trade.fillTime = c.datetime;
+                                updated++;
+                                // Conservative: same candle jisme fill hua, usme SL bhi hit ho sakta hai
+                                // (wick order unknown → SL maan lete hain agar touched)
+                            } else {
+                                continue; // abhi fill nahi hua - SL/TP check mat karo
+                            }
+                        }
+
+                        // PHASE 2: SL/TP check (sirf fill hone ke baad)
+                        let result = null;
                         if (trade.signal === 'BUY') {
-                            // Whichever hits first in this candle: conservative = SL first if both touched
                             if (low <= trade.sl) result = 'SL HIT';
                             else if (high >= trade.tp) result = 'TP HIT';
                         } else { // SELL
