@@ -495,6 +495,8 @@
             </button>
         </header>
 
+        <div id="newsWarning"></div>
+
         <div class="controls">
             <input type="text" id="customPair" placeholder="Enter pair (EURUSD)" maxlength="12">
             <button onclick="analyzePair()">Analyze</button>
@@ -573,7 +575,51 @@
             renderPairCards();
             loadCachedData();
             renderTrades();
+            renderNewsWarning();
         });
+
+        // ===== High-Impact News Warning (IST) =====
+        function renderNewsWarning() {
+            const div = document.getElementById('newsWarning');
+            if (!div) return;
+
+            const now = new Date();
+            const warnings = [];
+
+            // NFP: First Friday of every month, ~6:00 PM IST
+            const firstFriday = (() => {
+                const d = new Date(now.getFullYear(), now.getMonth(), 1);
+                while (d.getDay() !== 5) d.setDate(d.getDate() + 1);
+                return d.getDate();
+            })();
+            if (now.getDay() === 5 && now.getDate() === firstFriday) {
+                warnings.push('📊 <b>NFP Aaj!</b> US Non-Farm Payrolls ~6:00 PM IST - USD pairs aur Gold me bada move aa sakta hai');
+            }
+
+            // FOMC 2026 decision days (announcement ~11:30 PM IST)
+            const fomcDates = ['2026-01-28', '2026-03-18', '2026-04-29', '2026-06-17', '2026-07-29', '2026-09-16', '2026-10-28', '2026-12-09'];
+            const todayStr = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+            if (fomcDates.includes(todayStr)) {
+                warnings.push('🏦 <b>FOMC Aaj!</b> Fed rate decision ~11:30 PM IST - extreme volatility expected, naye trades avoid karo');
+            }
+            // FOMC kal hai? (day-before warning)
+            const tomorrow = new Date(now.getTime() + 86400000);
+            const tomStr = tomorrow.getFullYear() + '-' + String(tomorrow.getMonth() + 1).padStart(2, '0') + '-' + String(tomorrow.getDate()).padStart(2, '0');
+            if (fomcDates.includes(tomStr)) {
+                warnings.push('🏦 <b>FOMC Kal!</b> Fed decision kal raat - overnight positions careful rakho');
+            }
+
+            if (warnings.length === 0) {
+                div.innerHTML = '';
+                return;
+            }
+
+            div.innerHTML = warnings.map(w => `
+                <div style="background:rgba(255,68,68,0.1); border:1px solid rgba(255,68,68,0.4); border-radius:10px; padding:12px 14px; margin-bottom:12px; font-size:12px; color:#FFAAAA; line-height:1.5;">
+                    ⚠️ ${w}
+                </div>
+            `).join('');
+        }
 
         function renderPairCards() {
             const container = document.getElementById('pairsContainer');
@@ -957,6 +1003,28 @@
             return JSON.parse(localStorage.getItem('myTrades') || '[]');
         }
 
+        // P/L in USD based on pair type, lots, and exit price
+        function calcPL(trade) {
+            if (trade.status !== 'CLOSED' || !trade.lots) return null;
+            const exit = trade.result === 'TP HIT' ? trade.tp : trade.sl;
+            const diff = trade.signal === 'BUY' ? (exit - trade.entry) : (trade.entry - exit);
+            let pl;
+            if (trade.pair === 'XAUUSD') {
+                pl = diff * 100 * trade.lots; // 1 lot gold = 100 oz
+            } else if (trade.pair.endsWith('JPY')) {
+                pl = (diff * 100000 * trade.lots) / exit; // convert JPY P/L to USD
+            } else {
+                pl = diff * 100000 * trade.lots; // USD-quoted majors
+            }
+            return pl;
+        }
+
+        function fmtPL(pl) {
+            if (pl === null || pl === undefined) return '';
+            const sign = pl >= 0 ? '+' : '−';
+            return `${sign}$${Math.abs(pl).toFixed(2)}`;
+        }
+
         function saveTrades(trades) {
             localStorage.setItem('myTrades', JSON.stringify(trades));
         }
@@ -966,12 +1034,18 @@
             const a = window.lastAnalysis;
             if (a.signal === 'HOLD') return alert('HOLD signal pe trade record nahi hota');
 
+            const lotInput = prompt('Lot size kitna lagaya? (jaise 0.01, 0.05, 0.10)', '0.01');
+            if (lotInput === null) return; // cancelled
+            const lots = parseFloat(lotInput);
+            if (isNaN(lots) || lots <= 0) return alert('Lot size galat hai - number daalo jaise 0.01');
+
             const trades = getTrades();
             const trade = {
                 id: Date.now(),
                 pair: a.pair,
                 signal: a.signal,
                 orderType: a.orderType || (a.signal + ' LIMIT'),
+                lots: lots,
                 entry: parseFloat(a.entryZone),
                 sl: parseFloat(a.slZone),
                 tp: parseFloat(a.tpZone),
@@ -1060,10 +1134,14 @@
                             ? '<span style="color:#00FF96; font-weight:700;">✅ TP HIT</span>'
                             : '<span style="color:#FF4444; font-weight:700;">❌ SL HIT</span>';
                     const sigColor = t.signal === 'BUY' ? '#00FF96' : '#FF4444';
+                    const tradePL = t.pl !== undefined && t.pl !== null ? t.pl : calcPL(t);
+                    const plBadge = tradePL !== null
+                        ? `<span style="font-weight:700; color:${tradePL >= 0 ? '#00FF96' : '#FF4444'};">${fmtPL(tradePL)}</span>`
+                        : '';
                     return `
                     <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,140,0,0.2); border-radius:10px; padding:12px; margin-bottom:8px;">
                         <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
-                            <span style="font-weight:700; color:#FFB800;">${t.pair} <span style="color:${sigColor}; font-size:11px;">${t.signal}</span></span>
+                            <span style="font-weight:700; color:#FFB800;">${t.pair} <span style="color:${sigColor}; font-size:11px;">${t.signal}</span> <span style="color:#888; font-size:10px;">${t.lots ? t.lots + ' lot' : ''}</span></span>
                             ${statusBadge}
                         </div>
                         <div style="display:flex; justify-content:space-between; font-size:11px; color:#aaa;">
@@ -1073,7 +1151,10 @@
                         </div>
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px;">
                             <span style="font-size:10px; color:#666;">${dateStr}</span>
-                            <button onclick="deleteTrade(${t.id})" style="padding:2px 8px; font-size:9px; background:rgba(255,68,68,0.15); color:#FF8888; border:1px solid rgba(255,68,68,0.3); border-radius:6px;">🗑️</button>
+                            <span style="display:flex; gap:8px; align-items:center;">
+                                ${plBadge}
+                                <button onclick="deleteTrade(${t.id})" style="padding:2px 8px; font-size:9px; background:rgba(255,68,68,0.15); color:#FF8888; border:1px solid rgba(255,68,68,0.3); border-radius:6px;">🗑️</button>
+                            </span>
                         </div>
                     </div>`;
                 }).join('');
@@ -1140,6 +1221,11 @@
             const acc = closed.length ? ((wins / closed.length) * 100).toFixed(0) : 0;
             // Expectancy with RRR 2:1 → win gives +2R, loss gives -1R
             const expectancy = closed.length ? (((wins * 2) - losses) / closed.length).toFixed(2) : '0.00';
+            const totalPL = closed.reduce((sum, t) => {
+                const pl = t.pl !== undefined && t.pl !== null ? t.pl : calcPL(t);
+                return sum + (pl || 0);
+            }, 0);
+            const plColor = totalPL >= 0 ? '#00FF96' : '#FF4444';
 
             const A = '#FFB800'; // amber
             const box = `background:#141414; border:1px solid #2a2a2a; border-radius:8px;`;
@@ -1176,23 +1262,29 @@
                 const d = new Date(t.openTime);
                 const key = `${d.getFullYear()}-${String(d.getMonth()).padStart(2, '0')}`;
                 const label = d.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' });
-                if (!monthMap[key]) monthMap[key] = { label, total: 0, tp: 0, sl: 0 };
+                if (!monthMap[key]) monthMap[key] = { label, total: 0, tp: 0, sl: 0, pl: 0 };
                 monthMap[key].total++;
                 if (t.result === 'TP HIT') monthMap[key].tp++;
                 if (t.result === 'SL HIT') monthMap[key].sl++;
+                if (t.status === 'CLOSED') {
+                    const tpl = t.pl !== undefined && t.pl !== null ? t.pl : calcPL(t);
+                    monthMap[key].pl += (tpl || 0);
+                }
             });
             const monthRows = Object.keys(monthMap).sort().reverse().map(k => {
                 const m = monthMap[k];
                 const mClosed = m.tp + m.sl;
                 const mAcc = mClosed ? ((m.tp / mClosed) * 100).toFixed(0) + '%' : '—';
+                const mPLColor = m.pl >= 0 ? '#00FF96' : '#FF4444';
                 return `<tr style="border-bottom:1px solid #222;">
                     <td style="padding:10px 4px; color:#eee;">${m.label}</td>
                     <td style="padding:10px 4px; text-align:center; color:#ccc;">${m.total}</td>
                     <td style="padding:10px 4px; text-align:center; color:#00FF96;">${m.tp}</td>
                     <td style="padding:10px 4px; text-align:center; color:#FF4444;">${m.sl}</td>
                     <td style="padding:10px 4px; text-align:center; color:${A};">${mAcc}</td>
+                    <td style="padding:10px 4px; text-align:center; color:${mPLColor}; font-weight:700;">${mClosed ? fmtPL(m.pl) : '—'}</td>
                 </tr>`;
-            }).join('') || `<tr><td colspan="5" style="padding:14px; color:#666;">Abhi koi closed trade nahi</td></tr>`;
+            }).join('') || `<tr><td colspan="6" style="padding:14px; color:#666;">Abhi koi closed trade nahi</td></tr>`;
 
             const th = `padding:8px 4px; font-size:10px; color:#777; letter-spacing:2px; text-align:center; border-bottom:1px solid #333;`;
 
@@ -1211,6 +1303,9 @@
                         ${statBox(wins, 'TP HIT', '#00FF96')}
                         ${statBox(losses, 'SL HIT', '#FF4444')}
                         ${statBox(pending, 'PENDING')}
+                    </div>
+                    <div style="display:flex; gap:8px; margin-top:8px;">
+                        ${statBox(fmtPL(totalPL) || '$0.00', 'TOTAL P/L', plColor)}
                     </div>
                 </div>
 
@@ -1237,6 +1332,7 @@
                             <th style="${th}">TP</th>
                             <th style="${th}">SL</th>
                             <th style="${th}">ACC%</th>
+                            <th style="${th}">P/L</th>
                         </tr>
                         ${monthRows}
                     </table>
@@ -1354,6 +1450,7 @@
                             trade.status = 'CLOSED';
                             trade.result = result;
                             trade.closeTime = c.datetime;
+                            trade.pl = calcPL(trade);
                             updated++;
                             break;
                         }
