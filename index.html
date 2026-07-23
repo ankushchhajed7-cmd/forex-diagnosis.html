@@ -833,10 +833,71 @@
 
         function openSettings() {
             const existing = localStorage.getItem('td_api_key') || '';
-            const key = prompt('TwelveData API Key daalo (twelvedata.com se free milti hai):', existing);
+            const key = prompt('1/3 — TwelveData API Key:', existing);
             if (key !== null && key.trim() !== '') {
                 localStorage.setItem('td_api_key', key.trim());
-                alert('✅ API key saved! Ab pair analyze karo.');
+            }
+
+            const existingToken = localStorage.getItem('tg_bot_token') || '';
+            const token = prompt('2/3 — Telegram Bot Token (MT5 bridge ke liye, khali chhod sakte ho):', existingToken);
+            if (token !== null) {
+                localStorage.setItem('tg_bot_token', token.trim());
+            }
+
+            const existingChat = localStorage.getItem('tg_chat_id') || '';
+            const chat = prompt('3/3 — Telegram Chat ID:', existingChat);
+            if (chat !== null) {
+                localStorage.setItem('tg_chat_id', chat.trim());
+            }
+
+            alert('✅ Settings saved!');
+        }
+
+        // ===== MT5 Bridge via Telegram =====
+        async function sendToMT5() {
+            const a = window.lastAnalysis;
+            if (!a || a.signal === 'HOLD') return alert('HOLD signal pe order nahi bhej sakte');
+
+            const token = localStorage.getItem('tg_bot_token');
+            const chatId = localStorage.getItem('tg_chat_id');
+            if (!token || !chatId) {
+                alert('Pehle ⚙️ API Settings me Telegram Bot Token aur Chat ID daalo');
+                return openSettings();
+            }
+
+            const entry = parseFloat(document.getElementById('editEntry')?.value);
+            const sl = parseFloat(document.getElementById('editSL')?.value);
+            const tp = parseFloat(document.getElementById('editTP')?.value);
+            const lots = parseFloat(document.getElementById('editLots')?.value);
+            if ([entry, sl, tp, lots].some(isNaN)) return alert('Values check karo - koi field khali ya galat hai');
+
+            // Direction validation (same as recordTrade)
+            if (a.signal === 'BUY') {
+                if (sl >= entry) return alert('❌ BUY me SL entry se NEECHE hona chahiye');
+                if (tp <= entry) return alert('❌ BUY me TP entry se UPAR hona chahiye');
+            } else {
+                if (sl <= entry) return alert('❌ SELL me SL entry se UPAR hona chahiye');
+                if (tp >= entry) return alert('❌ SELL me TP entry se NEECHE hona chahiye');
+            }
+
+            const orderType = a.signal === 'BUY' ? 'BUYLIMIT' : 'SELLLIMIT';
+            const ticketId = Date.now();
+            // Format EA parse karega: #FXORDER|PAIR|TYPE|LOTS|ENTRY|SL|TP|ID
+            const msg = `#FXORDER|${a.pair}|${orderType}|${lots}|${entry}|${sl}|${tp}|${ticketId}`;
+
+            if (!confirm(`MT5 pe ye order bhejna hai?\n\n${a.pair} ${orderType}\nLots: ${lots}\nEntry: ${entry}\nSL: ${sl}\nTP: ${tp}`)) return;
+
+            try {
+                const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ chat_id: chatId, text: msg })
+                });
+                const data = await res.json();
+                if (!data.ok) throw new Error(data.description || 'Telegram error');
+                alert('✅ Order Telegram pe bhej diya!\nVPS ka EA ~10 sec me place karega.\n\nID: ' + ticketId);
+            } catch (e) {
+                alert('❌ Bhejne me problem: ' + e.message + '\n\nBot token / chat ID check karo.');
             }
         }
 
@@ -960,7 +1021,10 @@
                     <button class="btn-secondary" onclick="savAnalysis()">💾 Save</button>
                 </div>
                 ${analysis.signal !== 'HOLD' ? `
-                <button onclick="recordTrade()" style="width:100%; margin-top:10px; padding:14px; background: linear-gradient(135deg, #00FF96 0%, #00CC7A 100%); color:#000; font-weight:700; font-size:14px;">
+                <button onclick="sendToMT5()" style="width:100%; margin-top:10px; padding:14px; background: linear-gradient(135deg, #0088cc 0%, #005f8f 100%); color:#fff; font-weight:700; font-size:14px;">
+                    🚀 Send Order to MT5
+                </button>
+                <button onclick="recordTrade()" style="width:100%; margin-top:8px; padding:14px; background: linear-gradient(135deg, #00FF96 0%, #00CC7A 100%); color:#000; font-weight:700; font-size:14px;">
                     ✅ Maine Ye Trade Liya
                 </button>
                 ` : ''}
