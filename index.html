@@ -1535,7 +1535,7 @@
             const a = document.createElement('a');
             const dateStr = new Date().toISOString().slice(0, 10);
             a.href = url;
-            a.download = `forex-trades-backup-${dateStr}.json`;
+            a.download = `ForexDiagnosis-Backup-${dateStr}.json`;
             a.click();
             URL.revokeObjectURL(url);
         }
