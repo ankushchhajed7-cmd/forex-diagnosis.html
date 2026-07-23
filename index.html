@@ -543,6 +543,7 @@
         <div id="analysisPanel" class="analysis-panel"></div>
 
         <div id="statsWindow" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:#0d0d0d; z-index:1100; overflow-y:auto; font-family:'Courier New', monospace; padding:16px; padding-top:54px;"></div>
+        <div id="chartWindow" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:#0a0e27; z-index:1200; flex-direction:column;"></div>
         <input type="file" id="importFile" accept=".json" style="display:none" onchange="importTrades(event)">
 
         <div class="info-text">
@@ -954,6 +955,7 @@
                 </div>
 
                 <div class="action-buttons">
+                    <button class="btn-secondary" onclick="openChart('${pair}')">📈 Chart</button>
                     <button class="btn-secondary" onclick="shareWhatsApp()">📱 Share</button>
                     <button class="btn-secondary" onclick="savAnalysis()">💾 Save</button>
                 </div>
@@ -1209,6 +1211,7 @@
                             <span style="font-size:10px; color:#666;">${dateStr}</span>
                             <span style="display:flex; gap:8px; align-items:center;">
                                 ${plBadge}
+                                <button onclick="openChart('${t.pair}')" style="padding:2px 8px; font-size:9px; background:rgba(255,184,0,0.15); color:#FFB800; border:1px solid rgba(255,184,0,0.3); border-radius:6px;">📈</button>
                                 <button onclick="deleteTrade(${t.id})" style="padding:2px 8px; font-size:9px; background:rgba(255,68,68,0.15); color:#FF8888; border:1px solid rgba(255,68,68,0.3); border-radius:6px;">🗑️</button>
                             </span>
                         </div>
@@ -1255,6 +1258,60 @@
             if (!confirm('Ye trade delete karna hai?')) return;
             saveTrades(getTrades().filter(t => t.id !== id));
             renderTrades();
+        }
+
+        // ===== Live Chart (TradingView) =====
+        let chartPair = null;
+        let chartInterval = '60';
+
+        function tvSymbol(pair) {
+            if (pair === 'XAUUSD') return 'OANDA:XAUUSD';
+            return 'FX:' + pair;
+        }
+
+        function openChart(pair) {
+            chartPair = pair;
+            renderChart();
+        }
+
+        function setChartTF(tf, btn) {
+            chartInterval = tf;
+            renderChart();
+        }
+
+        function renderChart() {
+            const win = document.getElementById('chartWindow');
+            const tfs = [
+                { v: '5', l: '5m' },
+                { v: '15', l: '15m' },
+                { v: '30', l: '30m' },
+                { v: '60', l: '1H' },
+                { v: '240', l: '4H' },
+                { v: 'D', l: '1D' }
+            ];
+            const tfButtons = tfs.map(t => `
+                <button onclick="setChartTF('${t.v}')" style="flex:1; padding:8px 4px; font-size:12px; font-weight:600; background:${chartInterval === t.v ? 'rgba(255,184,0,0.25)' : 'rgba(255,255,255,0.05)'}; color:${chartInterval === t.v ? '#FFB800' : '#888'}; border:1px solid ${chartInterval === t.v ? '#FFB800' : 'rgba(255,140,0,0.2)'}; border-radius:8px;">${t.l}</button>
+            `).join('');
+
+            const src = `https://s.tradingview.com/widgetembed/?symbol=${encodeURIComponent(tvSymbol(chartPair))}&interval=${chartInterval}&theme=dark&style=1&locale=en&hide_side_toolbar=1&allow_symbol_change=0&save_image=0`;
+
+            win.style.display = 'flex';
+            win.innerHTML = `
+                <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 12px; background:#0d0d0d; border-bottom:1px solid rgba(255,140,0,0.3);">
+                    <span style="font-weight:700; color:#FFB800; font-size:15px;">📈 ${chartPair} Live</span>
+                    <button onclick="closeChart()" style="width:32px; height:32px; border-radius:50%; background:rgba(255,255,255,0.1); border:1px solid rgba(255,140,0,0.4); color:#FFB800; font-size:15px;">✕</button>
+                </div>
+                <div style="display:flex; gap:5px; padding:8px 10px; background:#0d0d0d;">
+                    ${tfButtons}
+                </div>
+                <iframe src="${src}" style="flex:1; width:100%; border:none;" allowfullscreen></iframe>
+            `;
+        }
+
+        function closeChart() {
+            const win = document.getElementById('chartWindow');
+            win.style.display = 'none';
+            win.innerHTML = '';
         }
 
         // ===== Terminal-Style Stats Window =====
