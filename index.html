@@ -19,8 +19,8 @@
         }
 
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 100%);
+            font-family: 'Courier New', Courier, monospace;
+            background: #0d0d0d;
             color: #e0e0e0;
             min-height: 100vh;
             padding: 12px;
@@ -33,25 +33,25 @@
 
         header {
             text-align: center;
-            margin-bottom: 24px;
+            margin-bottom: 20px;
             padding: 16px;
-            background: linear-gradient(135deg, rgba(255, 140, 0, 0.1) 0%, rgba(0, 255, 150, 0.05) 100%);
-            border-radius: 12px;
-            border: 1px solid rgba(255, 140, 0, 0.2);
+            background: #141414;
+            border-radius: 8px;
+            border: 1px solid #2a2a2a;
         }
 
         h1 {
-            font-size: 24px;
-            background: linear-gradient(135deg, #FFB800 0%, #00FF96 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            margin-bottom: 4px;
+            font-size: 22px;
+            color: #FFB800;
+            letter-spacing: 3px;
+            margin-bottom: 6px;
+            font-weight: 700;
         }
 
         .subtitle {
-            font-size: 12px;
-            color: #888;
+            font-size: 11px;
+            color: #777;
+            letter-spacing: 1px;
         }
 
         .controls {
@@ -71,17 +71,18 @@
             flex: 1;
             padding: 8px 4px;
             font-size: 12px;
-            font-weight: 600;
-            background: rgba(255, 255, 255, 0.05);
-            color: #888;
-            border: 1px solid rgba(255, 140, 0, 0.2);
-            border-radius: 8px;
+            font-weight: 700;
+            background: #141414;
+            color: #777;
+            border: 1px solid #2a2a2a;
+            border-radius: 6px;
             cursor: pointer;
+            font-family: 'Courier New', Courier, monospace;
             transition: all 0.2s;
         }
 
         .tf-btn.active {
-            background: rgba(255, 184, 0, 0.2);
+            background: rgba(255, 184, 0, 0.15);
             color: #FFB800;
             border-color: #FFB800;
         }
@@ -98,13 +99,16 @@
             justify-content: space-between;
             align-items: center;
             padding: 10px 14px;
-            border-radius: 8px;
+            border-radius: 6px;
             font-size: 13px;
+            background: #141414;
+            border: 1px solid #2a2a2a;
         }
 
         .confluence-cell .tf-label {
             color: #ccc;
-            font-weight: 600;
+            font-weight: 700;
+            letter-spacing: 1px;
         }
 
         .confluence-cell .tf-trend {
@@ -116,8 +120,7 @@
         }
 
         .confluence-cell.bullish {
-            background: rgba(0, 255, 150, 0.1);
-            border: 1px solid rgba(0, 255, 150, 0.3);
+            border-color: rgba(0, 255, 150, 0.3);
         }
 
         .confluence-cell.bullish .tf-trend {
@@ -125,126 +128,122 @@
         }
 
         .confluence-cell.bearish {
-            background: rgba(255, 68, 68, 0.1);
-            border: 1px solid rgba(255, 68, 68, 0.3);
+            border-color: rgba(255, 68, 68, 0.3);
         }
 
         .confluence-cell.bearish .tf-trend {
             color: #FF4444;
         }
 
-        input[type="text"] {
+        input[type="text"], input[type="number"] {
             flex: 1;
             padding: 10px 12px;
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 140, 0, 0.3);
+            background: #1a1a1a;
+            border: 1px solid #333;
             color: #e0e0e0;
-            border-radius: 8px;
+            border-radius: 6px;
             font-size: 14px;
             min-width: 120px;
+            font-family: 'Courier New', Courier, monospace;
         }
 
         button {
             padding: 10px 20px;
-            background: linear-gradient(135deg, #FFB800 0%, #FF8C00 100%);
+            background: #FFB800;
             color: #000;
             border: none;
-            border-radius: 8px;
-            font-weight: 600;
+            border-radius: 6px;
+            font-weight: 700;
             cursor: pointer;
             font-size: 14px;
-            transition: all 0.3s;
+            font-family: 'Courier New', Courier, monospace;
+            letter-spacing: 1px;
+            transition: all 0.2s;
         }
 
         button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 16px rgba(255, 140, 0, 0.4);
+            opacity: 0.85;
         }
 
         button:active {
-            transform: translateY(0);
+            transform: scale(0.98);
         }
 
         .analysis-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-            gap: 12px;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
             margin-bottom: 16px;
         }
 
         .feature-card {
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid rgba(255, 140, 0, 0.2);
-            border-radius: 10px;
-            padding: 12px;
+            background: #141414;
+            border: 1px solid #2a2a2a;
+            border-radius: 8px;
+            padding: 12px 6px;
             text-align: center;
-            transition: all 0.3s;
-        }
-
-        .feature-card:hover {
-            background: rgba(255, 140, 0, 0.1);
-            border-color: rgba(255, 140, 0, 0.5);
         }
 
         .feature-icon {
-            font-size: 24px;
-            margin-bottom: 6px;
+            font-size: 18px;
+            margin-bottom: 4px;
         }
 
         .feature-name {
-            font-size: 11px;
+            font-size: 10px;
             color: #FFB800;
-            font-weight: 600;
+            font-weight: 700;
+            letter-spacing: 1px;
         }
 
         .pairs-container {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
-            gap: 12px;
+            gap: 8px;
             margin-bottom: 16px;
         }
 
         .pair-card {
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid rgba(255, 140, 0, 0.2);
-            border-radius: 12px;
+            background: #141414;
+            border: 1px solid #2a2a2a;
+            border-radius: 8px;
             padding: 14px;
             cursor: pointer;
-            transition: all 0.3s;
+            transition: all 0.2s;
             position: relative;
             overflow: hidden;
         }
 
         .pair-card:hover {
-            background: rgba(255, 140, 0, 0.08);
-            border-color: rgba(255, 140, 0, 0.5);
+            border-color: #FFB800;
         }
 
         .pair-card.selected {
             border-color: #FFB800;
-            background: rgba(255, 140, 0, 0.15);
+            background: rgba(255, 184, 0, 0.08);
         }
 
         .pair-name {
-            font-size: 16px;
+            font-size: 15px;
             font-weight: 700;
             color: #FFB800;
             margin-bottom: 6px;
+            letter-spacing: 1px;
         }
 
         .pair-price {
-            font-size: 12px;
+            font-size: 11px;
             color: #00FF96;
             margin-bottom: 4px;
         }
 
         .pair-change {
             font-size: 10px;
-            color: #888;
+            color: #777;
         }
 
         .analysis-panel {
-            background: #0a0e27;
+            background: #0d0d0d;
             border: none;
             border-radius: 0;
             padding: 18px;
@@ -357,8 +356,9 @@
         .analysis-row {
             display: flex;
             justify-content: space-between;
+            align-items: center;
             padding: 10px 0;
-            border-bottom: 1px solid rgba(255, 140, 0, 0.1);
+            border-bottom: 1px solid #222;
             font-size: 13px;
         }
 
@@ -396,7 +396,7 @@
         }
 
         .btn-secondary {
-            background: rgba(0, 255, 150, 0.15) !important;
+            background: #141414 !important;
             color: #00FF96 !important;
             border: 1px solid rgba(0, 255, 150, 0.4) !important;
         }
@@ -531,7 +531,7 @@
         <div id="pairsContainer" class="pairs-container"></div>
 
         <div style="display:flex; justify-content:space-between; align-items:center; margin: 20px 0 10px;">
-            <span style="font-size:15px; font-weight:700; color:#FFB800;">📒 My Trades</span>
+            <span style="font-size:15px; font-weight:700; color:#FFB800; letter-spacing:2px;">MY TRADES</span>
             <span style="display:flex; gap:6px;">
                 <button onclick="openStatsWindow()" style="padding:6px 12px; font-size:11px; background:rgba(255,184,0,0.15); color:#FFB800; border:1px solid rgba(255,184,0,0.4);">📊 Stats</button>
                 <button onclick="checkTradeResults()" style="padding:6px 12px; font-size:11px; background:rgba(0,255,150,0.15); color:#00FF96; border:1px solid rgba(0,255,150,0.4);">🔄 Check Results</button>
@@ -956,7 +956,7 @@
                     </div>
                 </div>
 
-                <div style="text-align:center; font-size:11px; color:#888; margin-bottom:6px;">Multi-Timeframe Trend (Supertrend)</div>
+                <div style="text-align:center; font-size:11px; color:#888; margin-bottom:6px;">MULTI-TIMEFRAME TREND</div>
                 ${confluenceHTML}
 
                 <div id="analysisContent">
@@ -1220,19 +1220,19 @@
 
             statsDiv.style.display = 'flex';
             statsDiv.innerHTML = `
-                <div style="flex:1; text-align:center; padding:10px; background:rgba(0,255,150,0.08); border:1px solid rgba(0,255,150,0.25); border-radius:8px;">
+                <div style="flex:1; text-align:center; padding:10px; background:#141414; border:1px solid rgba(0,255,150,0.3); border-radius:8px;">
                     <div style="font-size:16px; font-weight:700; color:#00FF96;">${wins}</div>
                     <div style="font-size:9px; color:#888;">TP HIT</div>
                 </div>
-                <div style="flex:1; text-align:center; padding:10px; background:rgba(255,68,68,0.08); border:1px solid rgba(255,68,68,0.25); border-radius:8px;">
+                <div style="flex:1; text-align:center; padding:10px; background:#141414; border:1px solid rgba(255,68,68,0.3); border-radius:8px;">
                     <div style="font-size:16px; font-weight:700; color:#FF4444;">${losses}</div>
                     <div style="font-size:9px; color:#888;">SL HIT</div>
                 </div>
-                <div style="flex:1; text-align:center; padding:10px; background:rgba(255,184,0,0.08); border:1px solid rgba(255,184,0,0.25); border-radius:8px;">
+                <div style="flex:1; text-align:center; padding:10px; background:#141414; border:1px solid rgba(255,184,0,0.3); border-radius:8px;">
                     <div style="font-size:16px; font-weight:700; color:#FFB800;">${openCount}</div>
                     <div style="font-size:9px; color:#888;">OPEN</div>
                 </div>
-                <div style="flex:1; text-align:center; padding:10px; background:rgba(255,255,255,0.04); border:1px solid rgba(255,140,0,0.25); border-radius:8px;">
+                <div style="flex:1; text-align:center; padding:10px; background:#141414; border:1px solid #2a2a2a; border-radius:8px;">
                     <div style="font-size:16px; font-weight:700; color:#e0e0e0;">${winRate}%</div>
                     <div style="font-size:9px; color:#888;">WIN RATE</div>
                 </div>
@@ -1240,7 +1240,7 @@
 
             // Current month: full trade cards
             const currentMonthName = now.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
-            let html = `<div style="font-size:12px; font-weight:700; color:#00FF96; margin:6px 0 8px;">📅 ${currentMonthName} (This Month)</div>`;
+            let html = `<div style="font-size:12px; font-weight:700; color:#00FF96; margin:6px 0 8px; letter-spacing:1px;">▸ ${currentMonthName} (This Month)</div>`;
 
             if (currentMonthTrades.length === 0) {
                 html += '<div style="text-align:center; padding:12px; color:#666; font-size:11px;">Is month abhi koi trade nahi.</div>';
@@ -1261,7 +1261,7 @@
                         ? `<span style="font-weight:700; color:${tradePL >= 0 ? '#00FF96' : '#FF4444'};">${fmtPL(tradePL)}</span>`
                         : '';
                     return `
-                    <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,140,0,0.2); border-radius:10px; padding:12px; margin-bottom:8px;">
+                    <div style="background:#141414; border:1px solid #2a2a2a; border-radius:8px; padding:12px; margin-bottom:8px;">
                         <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
                             <span style="font-weight:700; color:#FFB800;">${t.pair} <span style="color:${sigColor}; font-size:11px;">${t.signal}</span> <span style="color:#888; font-size:10px;">${t.lots ? t.lots + ' lot' : ''}</span></span>
                             ${statusBadge}
@@ -1292,7 +1292,7 @@
                     monthGroups[key].trades.push(t);
                 });
 
-                html += `<div style="font-size:12px; font-weight:700; color:#888; margin:16px 0 8px;">📁 Previous Months (Summary)</div>`;
+                html += `<div style="font-size:12px; font-weight:700; color:#888; margin:16px 0 8px; letter-spacing:1px;">▸ PREVIOUS MONTHS</div>`;
 
                 // Sort newest month first
                 Object.keys(monthGroups).sort().reverse().forEach(key => {
@@ -1303,7 +1303,7 @@
                     const mOpen = g.trades.filter(t => t.status === 'OPEN').length;
                     const mRate = mClosed.length ? ((mWins / mClosed.length) * 100).toFixed(0) + '%' : '--';
                     html += `
-                    <div style="background:rgba(255,255,255,0.02); border:1px solid rgba(255,140,0,0.15); border-radius:10px; padding:12px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
+                    <div style="background:#141414; border:1px solid #2a2a2a; border-radius:8px; padding:12px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
                         <span style="font-weight:600; color:#ccc; font-size:12px;">${g.label}</span>
                         <span style="font-size:11px;">
                             <span style="color:#00FF96;">✅ ${mWins}</span> &nbsp;
