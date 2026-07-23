@@ -384,13 +384,14 @@
         }
 
         .action-buttons {
-            display: flex;
-            gap: 10px;
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
             margin-top: 16px;
         }
 
         .action-buttons button {
-            flex: 1;
+            width: 100%;
             padding: 12px;
             font-size: 12px;
         }
@@ -1017,7 +1018,8 @@
 
                 <div class="action-buttons">
                     <button class="btn-secondary" onclick="openChart('${pair}')">📈 Chart</button>
-                    <button class="btn-secondary" onclick="shareWhatsApp()">📱 Share</button>
+                    <button class="btn-secondary" onclick="shareWhatsApp()">📤 Share</button>
+                    <button class="btn-secondary" onclick="copySignal()">📋 Copy</button>
                     <button class="btn-secondary" onclick="savAnalysis()">💾 Save</button>
                 </div>
                 ${analysis.signal !== 'HOLD' ? `
@@ -1069,9 +1071,9 @@
             tpSpan.textContent = `(+$${reward.toFixed(2)})`;
         }
 
-        function shareWhatsApp() {
-            if (!window.lastAnalysis) return;
+        function buildShareText() {
             const a = window.lastAnalysis;
+            if (!a) return '';
             // Use edited values if inputs exist, fallback to original
             const entry = document.getElementById('editEntry')?.value || a.entryZone;
             const sl = document.getElementById('editSL')?.value || a.slZone;
@@ -1079,9 +1081,35 @@
             const zones = a.signal === 'HOLD'
                 ? '\n⏳ No trade zone - wait for clear signal'
                 : `\n📋 Order: *${a.orderType}*\n💹 Current: ${a.currentPrice}\n📍 Entry: ${entry}\n🛑 SL: ${sl}\n🎯 TP: ${tp}\n\nRRR: ${a.rrr}:1`;
-            const text = `🤖 *${a.pair} Analysis*\n\n📊 Signal: *${a.signal}*\nRisk Score: ${a.riskScore}/100\nConfidence: ${a.confidence}%\n${zones}\n\n*ForexDiagnosis*\nAI-Powered Analysis`;
-            const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
-            window.open(url, '_blank');
+            return `🤖 *${a.pair} Analysis*\n\n📊 Signal: *${a.signal}*\nRisk Score: ${a.riskScore}/100\nConfidence: ${a.confidence}%\n${zones}\n\n*ForexDiagnosis*\nAI-Powered Analysis`;
+        }
+
+        // System share sheet - user apna WhatsApp (SIM 1 ya SIM 2) khud choose kar sakta hai
+        async function shareWhatsApp() {
+            if (!window.lastAnalysis) return;
+            const text = buildShareText();
+
+            if (navigator.share) {
+                try {
+                    await navigator.share({ text: text });
+                    return;
+                } catch (e) {
+                    if (e.name === 'AbortError') return; // user cancelled
+                }
+            }
+            // Fallback: direct WhatsApp link (default app khulega)
+            window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
+        }
+
+        async function copySignal() {
+            if (!window.lastAnalysis) return;
+            const text = buildShareText().replace(/\*/g, ''); // plain text, no markdown
+            try {
+                await navigator.clipboard.writeText(text);
+                alert('✅ Copy ho gaya! Ab kisi bhi WhatsApp me paste kar do.');
+            } catch (e) {
+                alert('Copy nahi ho paya - Share button try karo.');
+            }
         }
 
         function savAnalysis() {
