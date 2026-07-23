@@ -934,17 +934,18 @@
                         <span class="analysis-value">${analysis.currentPrice}</span>
                     </div>
                     <div class="analysis-row">
-                        <span class="analysis-label">📍 Entry (Limit)</span>
-                        <span class="analysis-value" style="color: #FFB800;">${analysis.entryZone}</span>
+                        <span class="analysis-label">📍 Entry (Limit) ✏️</span>
+                        <input type="number" step="any" id="editEntry" value="${analysis.entryZone}" style="width:110px; padding:6px 8px; background:rgba(255,184,0,0.1); border:1px solid rgba(255,184,0,0.4); color:#FFB800; border-radius:6px; font-size:13px; font-weight:600; text-align:right;">
                     </div>
                     <div class="analysis-row">
-                        <span class="analysis-label">🛑 SL Zone</span>
-                        <span class="analysis-value">${analysis.slZone}</span>
+                        <span class="analysis-label">🛑 SL Zone ✏️</span>
+                        <input type="number" step="any" id="editSL" value="${analysis.slZone}" style="width:110px; padding:6px 8px; background:rgba(255,68,68,0.1); border:1px solid rgba(255,68,68,0.4); color:#FF8888; border-radius:6px; font-size:13px; font-weight:600; text-align:right;">
                     </div>
                     <div class="analysis-row">
-                        <span class="analysis-label">🎯 TP Zone</span>
-                        <span class="analysis-value" style="color: #00FF96;">${analysis.tpZone}</span>
+                        <span class="analysis-label">🎯 TP Zone ✏️</span>
+                        <input type="number" step="any" id="editTP" value="${analysis.tpZone}" style="width:110px; padding:6px 8px; background:rgba(0,255,150,0.1); border:1px solid rgba(0,255,150,0.4); color:#00FF96; border-radius:6px; font-size:13px; font-weight:600; text-align:right;">
                     </div>
+                    <div style="font-size:10px; color:#666; text-align:center; margin-top:6px;">✏️ Values edit kar sakte ho - trade record karne pe yehi save honge</div>
                     `}
                 </div>
 
@@ -970,9 +971,13 @@
         function shareWhatsApp() {
             if (!window.lastAnalysis) return;
             const a = window.lastAnalysis;
+            // Use edited values if inputs exist, fallback to original
+            const entry = document.getElementById('editEntry')?.value || a.entryZone;
+            const sl = document.getElementById('editSL')?.value || a.slZone;
+            const tp = document.getElementById('editTP')?.value || a.tpZone;
             const zones = a.signal === 'HOLD'
                 ? '\n⏳ No trade zone - wait for clear signal'
-                : `\n📋 Order: *${a.orderType}*\n💹 Current: ${a.currentPrice}\n📍 Entry: ${a.entryZone}\n🛑 SL: ${a.slZone}\n🎯 TP: ${a.tpZone}\n\nRRR: ${a.rrr}:1`;
+                : `\n📋 Order: *${a.orderType}*\n💹 Current: ${a.currentPrice}\n📍 Entry: ${entry}\n🛑 SL: ${sl}\n🎯 TP: ${tp}\n\nRRR: ${a.rrr}:1`;
             const text = `🤖 *${a.pair} Analysis*\n\n📊 Signal: *${a.signal}*\nRisk Score: ${a.riskScore}/100\nConfidence: ${a.confidence}%\n${zones}\n\n*ForexDiagnosis*\nAI-Powered Analysis`;
             const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
             window.open(url, '_blank');
@@ -1034,6 +1039,24 @@
             const a = window.lastAnalysis;
             if (a.signal === 'HOLD') return alert('HOLD signal pe trade record nahi hota');
 
+            // Read EDITED values from inputs (user modify kar sakta hai)
+            const entry = parseFloat(document.getElementById('editEntry')?.value);
+            const sl = parseFloat(document.getElementById('editSL')?.value);
+            const tp = parseFloat(document.getElementById('editTP')?.value);
+
+            if (isNaN(entry) || isNaN(sl) || isNaN(tp)) {
+                return alert('Entry/SL/TP values galat hain - numbers check karo');
+            }
+
+            // Direction validation - galat side ka SL/TP pakde
+            if (a.signal === 'BUY') {
+                if (sl >= entry) return alert('❌ BUY trade me SL entry se NEECHE hona chahiye!\nEntry: ' + entry + '\nSL: ' + sl);
+                if (tp <= entry) return alert('❌ BUY trade me TP entry se UPAR hona chahiye!\nEntry: ' + entry + '\nTP: ' + tp);
+            } else { // SELL
+                if (sl <= entry) return alert('❌ SELL trade me SL entry se UPAR hona chahiye!\nEntry: ' + entry + '\nSL: ' + sl);
+                if (tp >= entry) return alert('❌ SELL trade me TP entry se NEECHE hona chahiye!\nEntry: ' + entry + '\nTP: ' + tp);
+            }
+
             const lotInput = prompt('Lot size kitna lagaya? (jaise 0.01, 0.05, 0.10)', '0.01');
             if (lotInput === null) return; // cancelled
             const lots = parseFloat(lotInput);
@@ -1046,9 +1069,9 @@
                 signal: a.signal,
                 orderType: a.orderType || (a.signal + ' LIMIT'),
                 lots: lots,
-                entry: parseFloat(a.entryZone),
-                sl: parseFloat(a.slZone),
-                tp: parseFloat(a.tpZone),
+                entry: entry,
+                sl: sl,
+                tp: tp,
                 openTime: new Date().toISOString(),
                 status: 'OPEN',
                 filled: false,
@@ -1058,7 +1081,7 @@
             trades.unshift(trade);
             trades.splice(100); // keep last 100
             saveTrades(trades);
-            alert('✅ Trade record ho gaya! Dashboard pe "My Trades" me dikhega.');
+            alert('✅ Trade record ho gaya!\nEntry: ' + entry + '\nSL: ' + sl + '\nTP: ' + tp + '\n\nDashboard pe "My Trades" me dikhega.');
             closeAnalysisPanel();
             renderTrades();
         }
