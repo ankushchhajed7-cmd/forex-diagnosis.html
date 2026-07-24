@@ -1043,6 +1043,7 @@
                         <input type="number" step="any" id="editTP" value="${analysis.tpZone}" oninput="updateDollarValues()" style="width:110px; padding:6px 8px; background:rgba(0,255,150,0.1); border:1px solid rgba(0,255,150,0.4); color:#00FF96; border-radius:6px; font-size:13px; font-weight:600; text-align:right; font-family:inherit;">
                     </div>
                     <div id="pipInfo" style="font-size:10px; color:#666; text-align:center; margin-top:6px;"></div>
+                    <button onclick="refreshZones()" style="width:100%; margin-top:8px; padding:8px; font-size:11px; background:#141414; color:#888; border:1px solid #2a2a2a; border-radius:6px; font-family:inherit;">↻ RESET TO CALCULATED VALUES</button>
                     `}
                 </div>
 
@@ -1146,13 +1147,26 @@
                 return diff * 100000 * lots;
             };
 
-            const risk = Math.abs(toUSD(entry - sl, sl));
-            const reward = Math.abs(toUSD(tp - entry, tp));
-            slSpan.textContent = `(−$${risk.toFixed(2)})`;
-            tpSpan.textContent = `(+$${reward.toFixed(2)})`;
+            // Direction check PEHLE - galat side ka SL/TP koi valid risk/reward nahi hai
+            const badSL = a.signal === 'BUY' ? (sl >= entry) : (sl <= entry);
+            const badTP = a.signal === 'BUY' ? (tp <= entry) : (tp >= entry);
+
+            if (badSL) {
+                slSpan.textContent = '⚠️ INVALID';
+            } else {
+                const risk = Math.abs(toUSD(entry - sl, sl));
+                slSpan.textContent = `(−$${risk.toFixed(2)})`;
+            }
+
+            if (badTP) {
+                tpSpan.textContent = '⚠️ INVALID';
+            } else {
+                const reward = Math.abs(toUSD(tp - entry, tp));
+                tpSpan.textContent = `(+$${reward.toFixed(2)})`;
+            }
 
             // Pip / point distance - tight SL turant dikh jaye
-            if (pipDiv) {
+            if (pipDiv && !badSL) {
                 const slDist = Math.abs(entry - sl);
                 let distTxt;
                 if (a.pair === 'XAUUSD') {
@@ -1166,6 +1180,19 @@
                     ? ' ⚠️ tight - spread/noise se hit ho sakta hai'
                     : '';
                 pipDiv.innerHTML = `SL distance: <b style="color:#ccc;">${distTxt}</b>${warn}`;
+            }
+
+            // Galat side ka SL/TP turant red border + message
+            const slInput = document.getElementById('editSL');
+            const tpInput = document.getElementById('editTP');
+            if (slInput) slInput.style.borderColor = badSL ? '#FF0000' : 'rgba(255,68,68,0.4)';
+            if (tpInput) tpInput.style.borderColor = badTP ? '#FF0000' : 'rgba(0,255,150,0.4)';
+
+            if ((badSL || badTP) && pipDiv) {
+                const msgs = [];
+                if (badSL) msgs.push(`SL ${a.signal === 'BUY' ? 'neeche' : 'upar'} hona chahiye`);
+                if (badTP) msgs.push(`TP ${a.signal === 'BUY' ? 'upar' : 'neeche'} hona chahiye`);
+                pipDiv.innerHTML = `<span style="color:#FF6666;">⚠️ ${msgs.join(' • ')} — RESET dabao</span>`;
             }
         }
 
