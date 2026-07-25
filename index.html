@@ -798,6 +798,60 @@
             return 'sl_mult_' + (pair === 'XAUUSD' ? 'gold' : 'forex');
         }
 
+        // Signal Quality Score (0-100) - kitna solid setup hai
+        function computeQuality(analysis, confluence) {
+            if (analysis.signal === 'HOLD') {
+                return { score: 0, grade: 'NO TRADE', color: '#888', reasons: [] };
+            }
+
+            let score = 0;
+            const reasons = [];
+            const isBuy = analysis.signal === 'BUY';
+
+            // 1. Supertrend + MACD agree → 30 pts (signal ka core)
+            const macdBull = analysis.macd === 'BULLISH CROSS';
+            const stMacdAgree = (isBuy && analysis.supertrend === 'BULLISH' && macdBull) ||
+                                (!isBuy && analysis.supertrend === 'BEARISH' && !macdBull);
+            if (stMacdAgree) { score += 30; reasons.push('✓ Supertrend + MACD agree'); }
+            else reasons.push('✗ Supertrend/MACD conflict');
+
+            // 2. Multi-TF confluence → 30 pts (sab timeframes ek direction)
+            const bull = confluence.filter(c => c.trend === 'BULLISH').length;
+            const bear = confluence.filter(c => c.trend === 'BEARISH').length;
+            const total = confluence.length || 1;
+            const aligned = isBuy ? bull : bear;
+            const confPct = aligned / total;
+            if (confPct === 1) { score += 30; reasons.push(`✓ All ${total} timeframes aligned`); }
+            else if (confPct >= 0.75) { score += 20; reasons.push(`✓ ${aligned}/${total} timeframes aligned`); }
+            else if (confPct >= 0.5) { score += 10; reasons.push(`~ ${aligned}/${total} timeframes (mixed)`); }
+            else reasons.push(`✗ Only ${aligned}/${total} timeframes agree`);
+
+            // 3. RSI healthy zone → 20 pts (extremes pe reversal risk)
+            const rsi = analysis.rsi;
+            if (rsi >= 40 && rsi <= 60) { score += 20; reasons.push('✓ RSI neutral zone (safe)'); }
+            else if (rsi > 30 && rsi < 70) { score += 12; reasons.push('~ RSI ok'); }
+            else reasons.push('✗ RSI extreme (reversal risk)');
+
+            // 4. RSI momentum matches signal → 10 pts
+            const rsiMatchesBuy = isBuy && rsi >= 50;
+            const rsiMatchesSell = !isBuy && rsi <= 50;
+            if (rsiMatchesBuy || rsiMatchesSell) { score += 10; reasons.push('✓ RSI momentum matches'); }
+            else reasons.push('✗ RSI momentum against signal');
+
+            // 5. ATR healthy (not dead, not chaos) → 10 pts
+            const atrPct = analysis.rawAtr / analysis.rawPrice;
+            if (atrPct >= 0.0005 && atrPct <= 0.015) { score += 10; reasons.push('✓ Volatility healthy'); }
+            else if (atrPct < 0.0005) reasons.push('✗ Too quiet (weak moves)');
+            else reasons.push('✗ Too volatile (risky)');
+
+            let grade, color;
+            if (score >= 80) { grade = 'STRONG'; color = '#00FF96'; }
+            else if (score >= 50) { grade = 'MODERATE'; color = '#FFB800'; }
+            else { grade = 'WEAK'; color = '#FF4444'; }
+
+            return { score, grade, color, reasons };
+        }
+
         function getSLMult(pair) {
             const saved = localStorage.getItem(getSLMultKey(pair));
             if (saved !== null) return parseFloat(saved);
@@ -935,6 +989,27 @@
             const gaugeColor = signalColors[analysis.signal] || signalColors['HOLD'];
             const riskText = analysis.riskScore < 40 ? 'Low Risk' : analysis.riskScore < 70 ? 'Medium Risk' : 'High Risk';
 
+            // Signal quality score
+            const q = computeQuality(analysis, confluence);
+            window.lastQuality = q;
+            const qualityHTML = analysis.signal === 'HOLD' ? '' : `
+                <div style="background:${q.color}15; border:1px solid ${q.color}66; border-radius:10px; padding:12px 14px; margin-bottom:14px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                        <span style="font-size:12px; color:#888; letter-spacing:1px;">SIGNAL QUALITY</span>
+                        <span style="font-size:16px; font-weight:700; color:${q.color};">${q.grade} · ${q.score}/100</span>
+                    </div>
+                    <div style="height:6px; background:#222; border-radius:3px; overflow:hidden; margin-bottom:8px;">
+                        <div style="height:100%; width:${q.score}%; background:${q.color};"></div>
+                    </div>
+                    <div style="font-size:10px; color:#999; line-height:1.7;">
+                        ${q.reasons.map(r => `<div>${r}</div>`).join('')}
+                    </div>
+                    ${q.grade === 'STRONG' ? '<div style="text-align:center; margin-top:8px; font-size:11px; color:#00FF96; font-weight:700;">✅ HIGH PROBABILITY SETUP</div>' :
+                      q.grade === 'WEAK' ? '<div style="text-align:center; margin-top:8px; font-size:11px; color:#FF4444; font-weight:700;">⚠️ WEAK - SKIP KARNA BEHTAR</div>' :
+                      '<div style="text-align:center; margin-top:8px; font-size:11px; color:#FFB800; font-weight:700;">🟡 MODERATE - EXTRA CONFIRMATION LO</div>'}
+                </div>
+            `;
+
             const bullishCount = confluence.filter(c => c.trend === 'BULLISH').length;
             const bearishCount = confluence.filter(c => c.trend === 'BEARISH').length;
             const totalCount = confluence.length;
@@ -978,6 +1053,8 @@
                         </div>
                     </div>
                 </div>
+
+                ${qualityHTML}
 
                 <div style="text-align:center; font-size:11px; color:#888; margin-bottom:6px;">MULTI-TIMEFRAME TREND</div>
                 ${confluenceHTML}
@@ -1323,6 +1400,8 @@
                 signal: a.signal,
                 orderType: a.orderType || (a.signal + ' LIMIT'),
                 entryMode: mode,
+                quality: window.lastQuality ? window.lastQuality.grade : null,
+                qualityScore: window.lastQuality ? window.lastQuality.score : null,
                 lots: lots,
                 entry: entry,
                 sl: sl,
@@ -1420,7 +1499,7 @@
                     return `
                     <div style="background:#141414; border:1px solid #2a2a2a; border-radius:8px; padding:12px; margin-bottom:8px;">
                         <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
-                            <span style="font-weight:700; color:#FFB800;">${t.pair} <span style="color:${sigColor}; font-size:11px;">${t.signal}</span> <span style="color:#888; font-size:10px;">${t.lots ? t.lots + ' lot' : ''}${t.entryMode ? ' · ' + (t.entryMode === 'MARKET' ? '⚡' : '⏳') : ''}</span></span>
+                            <span style="font-weight:700; color:#FFB800;">${t.pair} <span style="color:${sigColor}; font-size:11px;">${t.signal}</span> <span style="color:#888; font-size:10px;">${t.lots ? t.lots + ' lot' : ''}${t.entryMode ? ' · ' + (t.entryMode === 'MARKET' ? '⚡' : '⏳') : ''}${t.quality ? ' · ' + (t.quality === 'STRONG' ? '🟢' : t.quality === 'MODERATE' ? '🟡' : '🔴') : ''}</span></span>
                             ${statusBadge}
                         </div>
                         <div style="display:flex; justify-content:space-between; font-size:11px; color:#aaa;">
@@ -1694,6 +1773,35 @@
                 </tr>`;
             }).join('');
 
+            // Quality-wise stats (STRONG vs MODERATE vs WEAK) - proof ki filter kaam karta hai
+            const qMap = { 'STRONG': { total:0,tp:0,sl:0,pl:0 }, 'MODERATE': { total:0,tp:0,sl:0,pl:0 }, 'WEAK': { total:0,tp:0,sl:0,pl:0 } };
+            trades.forEach(t => {
+                const g = t.quality;
+                if (!g || !qMap[g]) return;
+                qMap[g].total++;
+                if (t.result === 'TP HIT') qMap[g].tp++;
+                if (t.result === 'SL HIT') qMap[g].sl++;
+                if (t.status === 'CLOSED') {
+                    const p = t.pl !== undefined && t.pl !== null ? t.pl : calcPL(t);
+                    qMap[g].pl += (p || 0);
+                }
+            });
+            const qColors = { 'STRONG':'#00FF96', 'MODERATE':'#FFB800', 'WEAK':'#FF4444' };
+            const qualityRows = ['STRONG','MODERATE','WEAK'].map(g => {
+                const s = qMap[g];
+                const c = s.tp + s.sl;
+                const acc = c ? ((s.tp / c) * 100).toFixed(0) + '%' : '—';
+                const plCol = s.pl >= 0 ? '#00FF96' : '#FF4444';
+                return `<tr style="border-bottom:1px solid #222;">
+                    <td style="padding:10px 4px; color:${qColors[g]}; font-weight:700;">${g}</td>
+                    <td style="padding:10px 4px; text-align:center; color:#ccc;">${s.total}</td>
+                    <td style="padding:10px 4px; text-align:center; color:#00FF96;">${s.tp}</td>
+                    <td style="padding:10px 4px; text-align:center; color:#FF4444;">${s.sl}</td>
+                    <td style="padding:10px 4px; text-align:center; color:${A};">${acc}</td>
+                    <td style="padding:10px 4px; text-align:center; color:${plCol}; font-weight:700;">${c ? fmtPL(s.pl) : '—'}</td>
+                </tr>`;
+            }).join('');
+
             // Pair-wise stats
             const pairMap = {};
             trades.forEach(t => {
@@ -1781,6 +1889,22 @@
                             <th style="${th}">P/L</th>
                         </tr>
                         ${modeRows}
+                    </table>
+                </div>
+
+                <div style="${box} padding:16px; margin-bottom:14px;">
+                    <div style="font-size:20px; font-weight:700; color:${A}; letter-spacing:3px; margin-bottom:6px;">SIGNAL QUALITY</div>
+                    <div style="font-size:10px; color:#777; margin-bottom:10px;">STRONG signals ka win rate zyada hona chahiye - yehi filter ki value hai</div>
+                    <table style="width:100%; border-collapse:collapse; font-size:13px;">
+                        <tr>
+                            <th style="${th} text-align:left;">GRADE</th>
+                            <th style="${th}">TRADES</th>
+                            <th style="${th}">TP</th>
+                            <th style="${th}">SL</th>
+                            <th style="${th}">ACC%</th>
+                            <th style="${th}">P/L</th>
+                        </tr>
+                        ${qualityRows}
                     </table>
                 </div>
 
