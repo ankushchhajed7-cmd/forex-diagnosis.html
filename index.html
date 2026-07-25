@@ -554,7 +554,13 @@
 
     <script>
         const API_KEY = 'demo'; // Use your TwelveData API key
-        const DEFAULT_PAIRS = ['EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'XAUUSD', 'NZDUSD'];
+        const DEFAULT_PAIRS = ['EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'XAUUSD', 'NZDUSD', 'BTCUSD', 'ETHUSD'];
+
+        // Crypto pairs - inke liye decimals aur SL alag honge
+        const CRYPTO_PAIRS = ['BTCUSD', 'ETHUSD', 'BNBUSD', 'SOLUSD', 'XRPUSD', 'ADAUSD', 'DOGEUSD', 'LTCUSD'];
+        function isCrypto(pair) {
+            return CRYPTO_PAIRS.includes(pair.toUpperCase());
+        }
         let selectedPair = null;
         const analysisCache = {}; // { 'PAIR_interval': { analysis, confluence, timestamp } }
         let selectedInterval = '1h';
@@ -734,7 +740,7 @@
 
         async function fetchLiveAnalysis(pair, apiKey, interval, livePrice) {
             const symbol = toTDSymbol(pair);
-            const decimals = pair === 'XAUUSD' ? 2 : (pair === 'USDJPY' ? 3 : 5);
+            const decimals = pair === 'XAUUSD' ? 2 : (pair === 'USDJPY' ? 3 : (isCrypto(pair) ? 2 : 5));
 
             const [rsiData, macdData, supertrendData, atrData] = await Promise.all([
                 tdFetch('rsi', symbol, apiKey, interval, '&time_period=14'),
@@ -774,6 +780,7 @@
 
             return {
                 signal,
+                pair,
                 orderType: zones.orderType,
                 currentPrice: price.toFixed(decimals),
                 rawPrice: price,
@@ -793,9 +800,11 @@
             };
         }
 
-        // Pair-wise SL multiplier - XAUUSD 1.5, baaki pairs 2.5 (forex ko wider SL chahiye)
+        // Pair-wise SL multiplier - XAUUSD 1.5, crypto 2.0, baaki pairs 2.5
         function getSLMultKey(pair) {
-            return 'sl_mult_' + (pair === 'XAUUSD' ? 'gold' : 'forex');
+            if (pair === 'XAUUSD') return 'sl_mult_gold';
+            if (isCrypto(pair)) return 'sl_mult_crypto';
+            return 'sl_mult_forex';
         }
 
         // Signal Quality Score (0-100) - kitna solid setup hai
@@ -840,7 +849,8 @@
 
             // 5. ATR healthy (not dead, not chaos) → 10 pts
             const atrPct = analysis.rawAtr / analysis.rawPrice;
-            if (atrPct >= 0.0005 && atrPct <= 0.015) { score += 10; reasons.push('✓ Volatility healthy'); }
+            const atrMax = isCrypto(analysis.pair) ? 0.04 : 0.015;  // crypto zyada volatile hota hai
+            if (atrPct >= 0.0005 && atrPct <= atrMax) { score += 10; reasons.push('✓ Volatility healthy'); }
             else if (atrPct < 0.0005) reasons.push('✗ Too quiet (weak moves)');
             else reasons.push('✗ Too volatile (risky)');
 
@@ -855,7 +865,9 @@
         function getSLMult(pair) {
             const saved = localStorage.getItem(getSLMultKey(pair));
             if (saved !== null) return parseFloat(saved);
-            return pair === 'XAUUSD' ? 1.5 : 2.5;
+            if (pair === 'XAUUSD') return 1.5;
+            if (isCrypto(pair)) return 2.0;
+            return 2.5;
         }
 
         // Entry/SL/TP calculator - MARKET ya LIMIT mode, pair-wise SL multiplier
@@ -1220,6 +1232,7 @@
 
             const toUSD = (diff, refPrice) => {
                 if (a.pair === 'XAUUSD') return diff * 100 * lots;
+                if (isCrypto(a.pair)) return diff * lots;   // 1 lot = 1 coin
                 if (a.pair.endsWith('JPY')) return (diff * 100000 * lots) / refPrice;
                 return diff * 100000 * lots;
             };
@@ -1248,12 +1261,14 @@
                 let distTxt;
                 if (a.pair === 'XAUUSD') {
                     distTxt = '$' + slDist.toFixed(2) + ' move';
+                } else if (isCrypto(a.pair)) {
+                    distTxt = '$' + slDist.toFixed(2) + ' move';
                 } else if (a.pair.endsWith('JPY')) {
                     distTxt = (slDist / 0.01).toFixed(1) + ' pips';
                 } else {
                     distTxt = (slDist / 0.0001).toFixed(1) + ' pips';
                 }
-                const warn = (a.pair !== 'XAUUSD' && slDist / 0.0001 < 15)
+                const warn = (a.pair !== 'XAUUSD' && !isCrypto(a.pair) && slDist / 0.0001 < 15)
                     ? ' ⚠️ tight - spread/noise se hit ho sakta hai'
                     : '';
                 pipDiv.innerHTML = `SL distance: <b style="color:#ccc;">${distTxt}</b>${warn}`;
@@ -1347,6 +1362,8 @@
             let pl;
             if (trade.pair === 'XAUUSD') {
                 pl = diff * 100 * trade.lots; // 1 lot gold = 100 oz
+            } else if (isCrypto(trade.pair)) {
+                pl = diff * trade.lots; // 1 lot = 1 coin
             } else if (trade.pair.endsWith('JPY')) {
                 pl = (diff * 100000 * trade.lots) / exit; // convert JPY P/L to USD
             } else {
@@ -1569,6 +1586,7 @@
 
         function tvSymbol(pair) {
             if (pair === 'XAUUSD') return 'OANDA:XAUUSD';
+            if (isCrypto(pair)) return 'BINANCE:' + pair.replace('USD', 'USDT');
             return 'FX:' + pair;
         }
 
@@ -1672,7 +1690,7 @@
                     low = Math.min(low, parseFloat(c.low));
                 });
 
-                const decimals = chartPair === 'XAUUSD' ? 2 : (chartPair.endsWith('JPY') ? 3 : 5);
+                const decimals = chartPair === 'XAUUSD' ? 2 : (chartPair.endsWith('JPY') ? 3 : (isCrypto(chartPair) ? 2 : 5));
                 const range = high - low;
                 const ratios = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1];
                 // Uptrend swing (low → high): retracements high se neeche
