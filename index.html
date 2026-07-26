@@ -536,6 +536,7 @@
             <span style="display:flex; gap:6px;">
                 <button onclick="openStatsWindow()" style="padding:6px 12px; font-size:11px; background:rgba(255,184,0,0.15); color:#FFB800; border:1px solid rgba(255,184,0,0.4);">📊 Stats</button>
                 <button onclick="checkTradeResults()" style="padding:6px 12px; font-size:11px; background:rgba(0,255,150,0.15); color:#00FF96; border:1px solid rgba(0,255,150,0.4);">🔄 Check Results</button>
+                <button id="livePLBtn" onclick="updateLivePL()" style="padding:6px 12px; font-size:11px; background:rgba(0,204,255,0.15); color:#00CCFF; border:1px solid rgba(0,204,255,0.4);">💰 Live P/L</button>
             </span>
         </div>
         <div id="tradeStats" style="display:none; gap:8px; margin-bottom:10px;"></div>
@@ -1521,10 +1522,18 @@
                             ? '<span style="color:#00FF96; font-weight:700;">✅ TP HIT</span>'
                             : '<span style="color:#FF4444; font-weight:700;">❌ SL HIT</span>';
                     const sigColor = t.signal === 'BUY' ? '#00FF96' : '#FF4444';
-                    const tradePL = t.pl !== undefined && t.pl !== null ? t.pl : calcPL(t);
-                    const plBadge = tradePL !== null
-                        ? `<span style="font-weight:700; color:${tradePL >= 0 ? '#00FF96' : '#FF4444'};">${fmtPL(tradePL)}</span>`
-                        : '';
+                    const isRunning = t.status === 'OPEN' && t.filled;
+                    const livePLVal = (window.livePL && window.livePL[t.id] !== undefined) ? window.livePL[t.id] : null;
+                    let plBadge = '';
+                    if (isRunning && livePLVal !== null) {
+                        // Live P/L for running trade
+                        plBadge = `<span style="font-weight:700; color:${livePLVal >= 0 ? '#00FF96' : '#FF4444'};">${fmtPL(livePLVal)} <span style="font-size:8px; color:#00CCFF;">LIVE</span></span>`;
+                    } else {
+                        const tradePL = t.pl !== undefined && t.pl !== null ? t.pl : calcPL(t);
+                        plBadge = tradePL !== null
+                            ? `<span style="font-weight:700; color:${tradePL >= 0 ? '#00FF96' : '#FF4444'};">${fmtPL(tradePL)}</span>`
+                            : '';
+                    }
                     return `
                     <div style="background:#141414; border:1px solid #2a2a2a; border-radius:8px; padding:12px; margin-bottom:8px;">
                         <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
@@ -2017,6 +2026,45 @@
                 event.target.value = '';
             };
             reader.readAsText(file);
+        }
+
+        // Live P/L - running trades ka current profit/loss (button dabane pe)
+        window.livePL = {};  // { tradeId: plValue }
+        async function updateLivePL() {
+            const apiKey = localStorage.getItem('td_api_key');
+            if (!apiKey) { openSettings(); return; }
+            const trades = getTrades();
+            const running = trades.filter(t => t.status === 'OPEN' && t.filled);
+            if (running.length === 0) { alert('Koi running trade nahi hai.'); return; }
+
+            const btn = document.getElementById('livePLBtn');
+            if (btn) { btn.textContent = '⏳ Updating...'; btn.disabled = true; }
+
+            // Unique pairs - ek pair ka ek hi call (API bachao)
+            const pairs = [...new Set(running.map(t => t.pair))];
+            const prices = {};
+            for (const pair of pairs) {
+                try {
+                    const q = await tdFetch('quote', toTDSymbol(pair), apiKey, '1min');
+                    prices[pair] = parseFloat(q.close);
+                } catch (e) { console.log('price fail', pair); }
+            }
+
+            // Har running trade ka live P/L calculate
+            for (const t of running) {
+                const cur = prices[t.pair];
+                if (!cur || !t.lots) continue;
+                const diff = t.signal === 'BUY' ? (cur - t.entry) : (t.entry - cur);
+                let pl;
+                if (t.pair === 'XAUUSD') pl = diff * 100 * t.lots;
+                else if (isCrypto(t.pair)) pl = diff * t.lots;
+                else if (t.pair.endsWith('JPY')) pl = (diff * 100000 * t.lots) / cur;
+                else pl = diff * 100000 * t.lots;
+                window.livePL[t.id] = pl;
+            }
+
+            if (btn) { btn.textContent = '💰 Live P/L'; btn.disabled = false; }
+            renderTrades();
         }
 
         async function checkTradeResults() {
