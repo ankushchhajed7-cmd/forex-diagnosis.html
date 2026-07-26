@@ -565,6 +565,7 @@
         const analysisCache = {}; // { 'PAIR_interval': { analysis, confluence, timestamp } }
         let selectedInterval = '1h';
 
+
         function closeAnalysisPanel() {
             const panel = document.getElementById('analysisPanel');
             panel.classList.remove('active');
@@ -938,6 +939,7 @@
 
         // ===== MT5 Bridge via Firebase Realtime DB =====
         async function sendToMT5() {
+            if (window._sendingOrder) { alert('Order bhej raha hai, ruko...'); return; }
             const a = window.lastAnalysis;
             if (!a || a.signal === 'HOLD') return alert('HOLD signal pe order nahi bhej sakte');
 
@@ -962,7 +964,14 @@
                 if (tp >= entry) return alert('❌ SELL me TP entry se NEECHE hona chahiye');
             }
 
-            const orderType = a.signal === 'BUY' ? 'BUYLIMIT' : 'SELLLIMIT';
+            const mode = localStorage.getItem('entry_mode') || 'LIMIT';
+            const isMarketMode = (mode === 'MARKET');
+            let orderType;
+            if (isMarketMode) {
+                orderType = a.signal === 'BUY' ? 'BUYMARKET' : 'SELLMARKET';
+            } else {
+                orderType = a.signal === 'BUY' ? 'BUYLIMIT' : 'SELLLIMIT';
+            }
             const orderId = Date.now();
             const order = {
                 id: orderId,
@@ -976,6 +985,7 @@
 
             if (!confirm(`MT5 pe ye order bhejna hai?\n\n${a.pair} ${orderType}\nLots: ${lots}\nEntry: ${entry}\nSL: ${sl}\nTP: ${tp}`)) return;
 
+            window._sendingOrder = true;
             try {
                 const res = await fetch(`${fbUrl}/fxbridge/order.json`, {
                     method: 'PUT',
@@ -987,6 +997,8 @@
                 alert('✅ Order cloud pe bhej diya!\nVPS ka EA ~10 sec me place karega.\n\nID: ' + orderId);
             } catch (e) {
                 alert('❌ Bhejne me problem: ' + e.message + '\n\nFirebase URL aur rules check karo.');
+            } finally {
+                setTimeout(() => { window._sendingOrder = false; }, 3000);
             }
         }
 
