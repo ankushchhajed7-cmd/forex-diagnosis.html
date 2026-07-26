@@ -1129,7 +1129,7 @@
                     </div>
                     <div class="analysis-row">
                         <span class="analysis-label">💼 Lot Size ✏️</span>
-                        <input type="number" step="0.01" min="0.01" id="editLots" value="0.01" oninput="updateDollarValues()" style="width:110px; padding:6px 8px; background:rgba(255,255,255,0.06); border:1px solid #333; color:#e0e0e0; border-radius:6px; font-size:13px; font-weight:600; text-align:right; font-family:inherit;">
+                        <input type="number" step="0.01" min="0.01" id="editLots" value="${isCrypto(pair) ? '0.10' : '0.01'}" oninput="updateDollarValues()" style="width:110px; padding:6px 8px; background:rgba(255,255,255,0.06); border:1px solid #333; color:#e0e0e0; border-radius:6px; font-size:13px; font-weight:600; text-align:right; font-family:inherit;">
                     </div>
                     <div class="analysis-row">
                         <span class="analysis-label">📍 Entry ✏️</span>
