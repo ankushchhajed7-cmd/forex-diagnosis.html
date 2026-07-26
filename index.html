@@ -1549,6 +1549,7 @@
                             <span style="font-size:10px; color:#666;">${dateStr}</span>
                             <span style="display:flex; gap:8px; align-items:center;">
                                 ${plBadge}
+                                ${isRunning ? `<button onclick="closeTrade(${t.id})" style="padding:2px 8px; font-size:9px; background:rgba(0,255,150,0.15); color:#00FF96; border:1px solid rgba(0,255,150,0.4); border-radius:6px;">✔️ Close</button>` : ''}
                                 <button onclick="openChart('${t.pair}')" style="padding:2px 8px; font-size:9px; background:rgba(255,184,0,0.15); color:#FFB800; border:1px solid rgba(255,184,0,0.3); border-radius:6px;">📈</button>
                                 <button onclick="deleteTrade(${t.id})" style="padding:2px 8px; font-size:9px; background:rgba(255,68,68,0.15); color:#FF8888; border:1px solid rgba(255,68,68,0.3); border-radius:6px;">🗑️</button>
                             </span>
@@ -1590,6 +1591,29 @@
             }
 
             list.innerHTML = html;
+        }
+
+        // Manually close a running trade and book its P/L
+        function closeTrade(id) {
+            const trades = getTrades();
+            const t = trades.find(x => x.id === id);
+            if (!t) return;
+            const live = (window.livePL && window.livePL[id] !== undefined && window.livePL[id] !== null) ? window.livePL[id] : null;
+            const def = live !== null ? live.toFixed(2) : '';
+            const input = prompt(
+                `"${t.pair} ${t.signal}" trade close karna hai?\n\nKitna profit/loss hua? ($ me)\nProfit → jaise 3.08\nLoss → jaise -2.50`,
+                def
+            );
+            if (input === null) return; // cancelled
+            const pl = parseFloat(input);
+            if (isNaN(pl)) { alert('Sahi number daalo (jaise 3.08 ya -2.50)'); return; }
+            t.status = 'CLOSED';
+            t.result = pl >= 0 ? 'TP HIT' : 'SL HIT';
+            t.pl = pl;
+            t.closeTime = new Date().toISOString();
+            if (window.livePL) delete window.livePL[id];
+            saveTrades(trades);
+            renderTrades();
         }
 
         function deleteTrade(id) {
