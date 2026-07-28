@@ -892,14 +892,16 @@
             const symbol = toTDSymbol(pair);
             const decimals = pair === 'XAUUSD' ? 2 : (pair === 'USDJPY' ? 3 : (isCrypto(pair) ? 2 : 5));
 
-            const [rsiData, macdData, supertrendData, atrData] = await Promise.all([
+            const [rsiData, macdData, supertrendData, atrData, emaData] = await Promise.all([
                 tdFetch('rsi', symbol, apiKey, interval, '&time_period=14'),
                 tdFetch('macd', symbol, apiKey, interval),
                 tdFetch('supertrend', symbol, apiKey, interval, '&period=10&multiplier=3'),
-                tdFetch('atr', symbol, apiKey, interval, '&time_period=14')
+                tdFetch('atr', symbol, apiKey, interval, '&time_period=14'),
+                tdFetch('ema', symbol, apiKey, interval, '&time_period=200')
             ]);
 
             const price = livePrice;
+            const ema200 = parseFloat(emaData.values?.[0]?.ema || 0) || null;
             const rsi = parseFloat(rsiData.values?.[0]?.rsi || 50);
             const rsiSignal = rsi > 70 ? 'OVERBOUGHT' : rsi < 30 ? 'OVERSOLD' : 'NEUTRAL';
 
@@ -935,6 +937,7 @@
                 currentPrice: price.toFixed(decimals),
                 rawPrice: price,
                 rawAtr: atr,
+                ema200,
                 decimals: decimals,
                 riskScore,
                 confidence,
@@ -957,59 +960,87 @@
             return 'sl_mult_forex';
         }
 
-        // Signal Quality Score (0-100) - kitna solid setup hai
+        // Signal Quality Score (0-100) - setup kitna solid hai (win GUARANTEE nahi)
         function computeQuality(analysis, confluence) {
             if (analysis.signal === 'HOLD') {
-                return { score: 0, grade: 'NO TRADE', color: '#888', reasons: [] };
+                return { score: 0, grade: 'NO TRADE', color: '#888', reasons: [], reversalRisk: false };
             }
 
             let score = 0;
             const reasons = [];
             const isBuy = analysis.signal === 'BUY';
+            const rsi = Math.round(analysis.rsi);
 
-            // 1. Supertrend + MACD agree → 30 pts (signal ka core)
+            // 1. Supertrend + MACD agree → 20 pts (signal ka core)
             const macdBull = analysis.macd === 'BULLISH CROSS';
             const stMacdAgree = (isBuy && analysis.supertrend === 'BULLISH' && macdBull) ||
                                 (!isBuy && analysis.supertrend === 'BEARISH' && !macdBull);
-            if (stMacdAgree) { score += 30; reasons.push('✓ Supertrend + MACD agree'); }
+            if (stMacdAgree) { score += 20; reasons.push('✓ Supertrend + MACD agree'); }
             else reasons.push('✗ Supertrend/MACD conflict');
 
-            // 2. Multi-TF confluence → 30 pts (sab timeframes ek direction)
+            // 2. Multi-TF confluence → 20 pts (sab timeframes ek direction)
             const bull = confluence.filter(c => c.trend === 'BULLISH').length;
             const bear = confluence.filter(c => c.trend === 'BEARISH').length;
             const total = confluence.length || 1;
             const aligned = isBuy ? bull : bear;
             const confPct = aligned / total;
-            if (confPct === 1) { score += 30; reasons.push(`✓ All ${total} timeframes aligned`); }
-            else if (confPct >= 0.75) { score += 20; reasons.push(`✓ ${aligned}/${total} timeframes aligned`); }
-            else if (confPct >= 0.5) { score += 10; reasons.push(`~ ${aligned}/${total} timeframes (mixed)`); }
+            if (confPct === 1) { score += 20; reasons.push(`✓ All ${total} timeframes aligned`); }
+            else if (confPct >= 0.75) { score += 14; reasons.push(`✓ ${aligned}/${total} timeframes aligned`); }
+            else if (confPct >= 0.5) { score += 7; reasons.push(`~ ${aligned}/${total} timeframes (mixed)`); }
             else reasons.push(`✗ Only ${aligned}/${total} timeframes agree`);
 
-            // 3. RSI healthy zone → 20 pts (extremes pe reversal risk)
-            const rsi = analysis.rsi;
-            if (rsi >= 40 && rsi <= 60) { score += 20; reasons.push('✓ RSI neutral zone (safe)'); }
-            else if (rsi > 30 && rsi < 70) { score += 12; reasons.push('~ RSI ok'); }
-            else reasons.push('✗ RSI extreme (reversal risk)');
+            // 3. ENTRY TIMING vs RSI → 25 pts (SABSE ZAROORI - late/exhausted entry se bachao)
+            const contExtreme = (isBuy && rsi >= 70) || (!isBuy && rsi <= 30);   // exhausted = reversal risk
+            const contStretch = (isBuy && rsi >= 65) || (!isBuy && rsi <= 35);   // getting stretched
+            let reversalRisk = false;
+            if (contExtreme) {
+                reversalRisk = true;
+                reasons.push(`⚠️ ${isBuy ? 'BUY into OVERBOUGHT' : 'SELL into OVERSOLD'} (RSI ${rsi}) — reversal/bounce risk`);
+            } else if (contStretch) {
+                score += 6;
+                reasons.push(`~ RSI ${rsi} — thoda stretched, sambhal ke`);
+            } else if ((isBuy && rsi >= 50 && rsi < 65) || (!isBuy && rsi <= 50 && rsi > 35)) {
+                score += 25;
+                reasons.push(`✓ Entry timing achha (RSI ${rsi}, trend healthy)`);
+            } else if ((isBuy && rsi >= 42 && rsi < 50) || (!isBuy && rsi <= 58 && rsi > 50)) {
+                score += 15;
+                reasons.push(`~ RSI ${rsi} — momentum abhi build ho raha`);
+            } else {
+                reasons.push(`✗ RSI ${rsi} signal ke against`);
+            }
 
-            // 4. RSI momentum matches signal → 10 pts
-            const rsiMatchesBuy = isBuy && rsi >= 50;
-            const rsiMatchesSell = !isBuy && rsi <= 50;
-            if (rsiMatchesBuy || rsiMatchesSell) { score += 10; reasons.push('✓ RSI momentum matches'); }
-            else reasons.push('✗ RSI momentum against signal');
-
-            // 5. ATR healthy (not dead, not chaos) → 10 pts
+            // 4. Volatility healthy (not dead, not chaos) → 15 pts
             const atrPct = analysis.rawAtr / analysis.rawPrice;
-            const atrMax = isCrypto(analysis.pair) ? 0.04 : 0.015;  // crypto zyada volatile hota hai
-            if (atrPct >= 0.0005 && atrPct <= atrMax) { score += 10; reasons.push('✓ Volatility healthy'); }
+            const atrMax = isCrypto(analysis.pair) ? 0.04 : 0.015;
+            if (atrPct >= 0.0005 && atrPct <= atrMax) { score += 15; reasons.push('✓ Volatility healthy'); }
             else if (atrPct < 0.0005) reasons.push('✗ Too quiet (weak moves)');
             else reasons.push('✗ Too volatile (risky)');
 
+            // 5. EMA200 major trend filter → 20 pts (+ overextension penalty)
+            if (analysis.ema200 && analysis.ema200 > 0) {
+                const aboveEma = analysis.rawPrice > analysis.ema200;
+                const withTrend = (isBuy && aboveEma) || (!isBuy && !aboveEma);
+                if (withTrend) { score += 20; reasons.push('✓ EMA200 bade trend ke saath'); }
+                else { score -= 5; reasons.push('⚠️ EMA200 ke against — counter-trend, risky'); }
+                const distAtr = analysis.rawAtr > 0 ? Math.abs(analysis.rawPrice - analysis.ema200) / analysis.rawAtr : 0;
+                if (distAtr > 3.5) { score -= 10; reasons.push(`⚠️ Price EMA200 se ${distAtr.toFixed(1)}× ATR door — stretched, pullback risk`); }
+            } else {
+                score += 14; reasons.push('~ EMA200 data N/A');
+            }
+
+            // ---- REVERSAL-RISK GATE: exhaustion me "high probability" nahi ho sakta ----
+            if (reversalRisk) {
+                score = Math.min(score, 55);   // MODERATE se upar nahi
+                reasons.push('💡 Behtar: pullback ka wait karo ya LIMIT order lagao — market chase mat karo');
+            }
+            score = Math.max(0, Math.min(100, score));
+
             let grade, color;
-            if (score >= 80) { grade = 'STRONG'; color = '#00FF96'; }
+            if (score >= 78 && !reversalRisk) { grade = 'STRONG'; color = '#00FF96'; }
             else if (score >= 50) { grade = 'MODERATE'; color = '#FFB800'; }
             else { grade = 'WEAK'; color = '#FF4444'; }
 
-            return { score, grade, color, reasons };
+            return { score, grade, color, reasons, reversalRisk };
         }
 
         function getSLMult(pair) {
@@ -1178,7 +1209,8 @@
                     <div style="font-size:10px; color:#999; line-height:1.7;">
                         ${q.reasons.map(r => `<div>${r}</div>`).join('')}
                     </div>
-                    ${q.grade === 'STRONG' ? '<div style="text-align:center; margin-top:8px; font-size:11px; color:#00FF96; font-weight:700;">✅ HIGH PROBABILITY SETUP</div>' :
+                    ${q.reversalRisk ? '<div style="text-align:center; margin-top:8px; padding:7px; background:rgba(255,68,68,.15); border:1px solid rgba(255,68,68,.5); border-radius:8px; font-size:11px; color:#FF6B6B; font-weight:700;">⚠️ REVERSAL RISK — Late entry! Pullback ya LIMIT order behtar</div>' :
+                      q.grade === 'STRONG' ? '<div style="text-align:center; margin-top:8px; font-size:11px; color:#00FF96; font-weight:700;">✅ HIGH PROBABILITY SETUP</div>' :
                       q.grade === 'WEAK' ? '<div style="text-align:center; margin-top:8px; font-size:11px; color:#FF4444; font-weight:700;">⚠️ WEAK - SKIP KARNA BEHTAR</div>' :
                       '<div style="text-align:center; margin-top:8px; font-size:11px; color:#FFB800; font-weight:700;">🟡 MODERATE - EXTRA CONFIRMATION LO</div>'}
                 </div>
