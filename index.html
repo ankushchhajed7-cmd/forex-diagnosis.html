@@ -586,7 +586,41 @@
             loadCachedData();
             renderTrades();
             renderNewsWarning();
+            setTimeout(syncMT5Results, 3000);      // load ke baad ek baar
+            setInterval(syncMT5Results, 15000);    // har 15 sec auto-sync
         });
+
+        // ===== Auto-sync: MT5 se band hue trades ka result Firebase se lo =====
+        async function syncMT5Results() {
+            const fbUrl = localStorage.getItem('fb_url');
+            if (!fbUrl) return;
+            try {
+                const res = await fetch(`${fbUrl}/fxbridge/results.json`);
+                if (!res.ok) return;
+                const data = await res.json();
+                if (!data || typeof data !== 'object') return;
+                const trades = getTrades();
+                let changed = false;
+                Object.values(data).forEach(r => {
+                    if (!r || r.id === undefined || r.id === null) return;
+                    const t = trades.find(x => String(x.id) === String(r.id));
+                    if (t && t.status === 'OPEN') {
+                        const profit = parseFloat(r.profit);
+                        const reason = String(r.reason || '').toUpperCase();
+                        t.status = 'CLOSED';
+                        if (reason === 'SL') t.result = 'SL HIT';
+                        else if (reason === 'TP') t.result = 'TP HIT';
+                        else t.result = (!isNaN(profit) && profit >= 0) ? 'TP HIT' : 'SL HIT';
+                        if (!isNaN(profit)) t.pl = profit;
+                        t.filled = true;
+                        t.closeTime = new Date().toISOString();
+                        if (window.livePL) delete window.livePL[t.id];
+                        changed = true;
+                    }
+                });
+                if (changed) { saveTrades(trades); renderTrades(); }
+            } catch (e) { /* silent - network/firebase issue */ }
+        }
 
         // ===== High-Impact News Warning (IST) =====
         function renderNewsWarning() {
@@ -973,7 +1007,8 @@
             } else {
                 orderType = a.signal === 'BUY' ? 'BUYLIMIT' : 'SELLLIMIT';
             }
-            const orderId = Date.now();
+            a.linkId = a.linkId || Date.now();
+            const orderId = a.linkId;
             const order = {
                 id: orderId,
                 pair: a.pair,
@@ -1425,7 +1460,7 @@
             const mode = localStorage.getItem('entry_mode') || 'LIMIT';
             const isMarket = mode === 'MARKET';
             const trade = {
-                id: Date.now(),
+                id: (a.linkId = a.linkId || Date.now()),
                 pair: a.pair,
                 signal: a.signal,
                 orderType: a.orderType || (a.signal + ' LIMIT'),
