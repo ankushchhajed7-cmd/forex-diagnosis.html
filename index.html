@@ -510,26 +510,18 @@
             <button class="tf-btn active" data-tf="1h" onclick="setTimeframe('1h', this)">1H</button>
         </div>
 
-        <div class="analysis-grid">
-            <div class="feature-card">
-                <div class="feature-icon">🤖</div>
-                <div class="feature-name">AI Analysis</div>
-            </div>
-            <div class="feature-card">
-                <div class="feature-icon">📊</div>
-                <div class="feature-name">Multi-Timeframe</div>
-            </div>
-            <div class="feature-card">
-                <div class="feature-icon">🛡️</div>
-                <div class="feature-name">Risk Management</div>
-            </div>
-            <div class="feature-card">
-                <div class="feature-icon">🎯</div>
-                <div class="feature-name">High Probability</div>
-            </div>
-        </div>
-
         <div id="pairsContainer" class="pairs-container"></div>
+
+        <!-- Trading Gyaan: rotating educational tips (usable dead-space) -->
+        <div id="gyaanCard" onclick="nextTip()" style="cursor:pointer; background:linear-gradient(150deg, rgba(255,184,0,.10), rgba(255,184,0,.02)); border:1px solid rgba(255,184,0,.35); border-radius:14px; padding:15px 18px; margin:14px 0; user-select:none;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:9px;">
+                <span style="font-size:12px; font-weight:700; letter-spacing:.12em; color:#FFB800; text-transform:uppercase;">📚 Trading Gyaan</span>
+                <span id="gyaanTag" style="font-size:10px; font-weight:700; color:#241900; background:#FFB800; padding:3px 10px; border-radius:20px;">TIP</span>
+            </div>
+            <div id="gyaanTitle" style="font-size:16px; font-weight:700; color:#FFD87A; margin-bottom:5px;">Loading...</div>
+            <div id="gyaanDesc" style="font-size:13.5px; line-height:1.45; color:#cfc7b4;">—</div>
+            <div style="text-align:right; margin-top:9px; font-size:10px; color:#8C8676; letter-spacing:.08em;">tap for next →</div>
+        </div>
 
         <div style="display:flex; justify-content:space-between; align-items:center; margin: 20px 0 10px;">
             <span style="font-size:15px; font-weight:700; color:#FFB800; letter-spacing:2px;">MY TRADES</span>
@@ -538,6 +530,11 @@
                 <button onclick="checkTradeResults()" style="padding:6px 12px; font-size:11px; background:rgba(0,255,150,0.15); color:#00FF96; border:1px solid rgba(0,255,150,0.4);">🔄 Check Results</button>
                 <button id="livePLBtn" onclick="updateLivePL()" style="padding:6px 12px; font-size:11px; background:rgba(0,204,255,0.15); color:#00CCFF; border:1px solid rgba(0,204,255,0.4);">💰 Live P/L</button>
             </span>
+        </div>
+        <!-- MT5 Quick Controls: applies to ALL open trades via EA -->
+        <div style="display:flex; gap:8px; margin-bottom:12px;">
+            <button onclick="breakevenAll()" style="flex:1; padding:11px; font-size:12px; font-weight:700; background:rgba(255,184,0,.14); color:#FFC24D; border:1px solid rgba(255,184,0,.45); border-radius:10px; cursor:pointer;">⚡ All to Breakeven</button>
+            <button id="trailBtn" onclick="toggleTrail()" style="flex:1; padding:11px; font-size:12px; font-weight:700; background:rgba(0,204,255,.12); color:#00CCFF; border:1px solid rgba(0,204,255,.45); border-radius:10px; cursor:pointer;">📉 Trailing: OFF</button>
         </div>
         <div id="tradeStats" style="display:none; gap:8px; margin-bottom:10px;"></div>
         <div id="tradesList"></div>
@@ -588,7 +585,85 @@
             renderNewsWarning();
             setTimeout(syncMT5Results, 3000);      // load ke baad ek baar
             setInterval(syncMT5Results, 15000);    // har 15 sec auto-sync
+            showTip();                             // Trading Gyaan
         });
+
+        // ===== Trading Gyaan: rotating educational tips =====
+        const TRADING_TIPS = [
+            {c:"RISK",     t:"1–2% Rule",              d:"Ek trade me apne capital ka sirf 1–2% risk karo. Bada risk account jaldi khali kar deta hai."},
+            {c:"RISK",     t:"Risk-Reward 1:2",        d:"Kam se kam 1:2 rakho — SL $1 to TP $2. Aadhe trade galat hokar bhi profit rahega."},
+            {c:"TREND",    t:"Trend Is Your Friend",   d:"Trend ke saath trade karo. Uptrend me buy, downtrend me sell — ulta jaana mehnga padta hai."},
+            {c:"LEVELS",   t:"Support & Resistance",   d:"Support pe buy, resistance pe sell socho. Level clean toote to breakout ka wait karo."},
+            {c:"RSI",      t:"RSI Overbought/Oversold",d:"RSI 70+ = overbought (girne ka chance), 30- = oversold (badhne ka chance). Akela nahi, confirm karo."},
+            {c:"SETUP",    t:"Confluence Chahiye",     d:"2–3 signal ek saath milein tabhi entry lo. Akela indicator aksar galat hota hai."},
+            {c:"TIMEFRAME",t:"Multi-Timeframe",        d:"Bade timeframe (1H/4H) ka trend dekho, chhote (5m/15m) pe entry lo. Dono align hon."},
+            {c:"STOP-LOSS",t:"SL Kabhi Mat Hatao",     d:"Stop-loss peeche mat khiso. Loss chhota rakhna hi long-term survival hai."},
+            {c:"TIMING",   t:"Session Overlap",        d:"London + New York overlap (~6:30–9:30 PM IST) me sabse zyada movement — best window."},
+            {c:"GOLD",     t:"XAUUSD Volatile Hai",    d:"Gold tez chalta hai — lot chhota rakho aur SL thoda wide, warna jaldi hit ho jata hai."},
+            {c:"CANDLE",   t:"Candle Signals",         d:"Doji = uncertainty. Bullish/Bearish Engulfing = strong reversal ka signal."},
+            {c:"MINDSET",  t:"Revenge Trading Nahi",   d:"Loss ke baad turant badla lene mat kudo. Break lo, phir fresh mind se dekho."},
+            {c:"ENTRY",    t:"Fake Breakout Se Bacho", d:"Wick pe mat kudo — candle CLOSE ka wait karo. Zyadatar breakout fake hote hain."},
+            {c:"NEWS",     t:"News Time Spread",       d:"High-impact news (NFP, FOMC) pe spread phailta hai. Position halka karo ya avoid."},
+            {c:"EMA",      t:"EMA200 Trend Filter",    d:"Price EMA200 ke upar = uptrend, neeche = downtrend. Direction ka simple filter."},
+            {c:"MACD",     t:"MACD Crossover",         d:"MACD line signal line ko cross kare to momentum shift — trend ke saath ho to strong."},
+            {c:"SIZING",   t:"Position Sizing",        d:"Pehle risk ($) decide karo, phir lot. SL points × pip value = risk. Lot uske hisaab se."},
+            {c:"MINDSET",  t:"Overtrading Se Bacho",   d:"Din me 2–3 quality trade kaafi. Har candle pe trade = zyada loss."},
+            {c:"JOURNAL",  t:"Trade Journal Rakho",    d:"Har trade note karo — kyun liya, result kya. Yahi seekhne ka sabse tez tarika."},
+            {c:"PATIENCE", t:"Best Trade = Skip",      d:"Kabhi best trade wo hoti hai jo tum NAHI lete. Setup na ho to ruk jaana bhi trade hai."}
+        ];
+        let _tipIdx = Math.floor(Math.random() * TRADING_TIPS.length);
+        function showTip(){
+            const tip = TRADING_TIPS[_tipIdx];
+            const T = document.getElementById('gyaanTitle');
+            const D = document.getElementById('gyaanDesc');
+            const G = document.getElementById('gyaanTag');
+            if(!T || !D) return;
+            T.textContent = tip.t; D.textContent = tip.d; if(G) G.textContent = tip.c;
+        }
+        function nextTip(){ _tipIdx = (_tipIdx + 1) % TRADING_TIPS.length; showTip(); }
+        setInterval(nextTip, 9000);
+
+        // ===== MT5 Quick Controls: Breakeven / Trailing (all open trades via EA) =====
+        function miniToast(msg, ok){
+            let t = document.getElementById('miniToast');
+            if(!t){
+                t = document.createElement('div'); t.id='miniToast';
+                t.style.cssText='position:fixed;left:50%;bottom:90px;transform:translateX(-50%);z-index:99999;padding:12px 18px;border-radius:10px;font-size:13px;font-weight:600;color:#fff;box-shadow:0 8px 30px rgba(0,0,0,.5);max-width:88%;text-align:center;transition:opacity .3s;';
+                document.body.appendChild(t);
+            }
+            t.style.background = (ok===false) ? '#c0392b' : '#1f8f4d';
+            t.textContent = msg; t.style.opacity='1';
+            clearTimeout(window._toastT); window._toastT = setTimeout(()=>{ t.style.opacity='0'; }, 2800);
+        }
+        async function sendCommand(patch){
+            const fbUrl = localStorage.getItem('fb_url');
+            if(!fbUrl){ miniToast('Firebase URL set nahi hai — API Settings me daalo', false); return false; }
+            try{
+                const res = await fetch(`${fbUrl}/fxbridge/command.json`, {
+                    method:'PATCH', headers:{'Content-Type':'application/json'},
+                    body: JSON.stringify(patch)
+                });
+                return res.ok;
+            }catch(e){ return false; }
+        }
+        async function breakevenAll(){
+            const ok = await sendCommand({ be: Date.now() });
+            miniToast(ok ? '⚡ Breakeven bheja — profit wale trades ka SL entry pe' : 'Command fail — Firebase check karo', ok);
+        }
+        let _trailOn = localStorage.getItem('trail_on') === '1';
+        function updateTrailBtn(){
+            const b = document.getElementById('trailBtn'); if(!b) return;
+            b.textContent = _trailOn ? '📉 Trailing: ON' : '📉 Trailing: OFF';
+            b.style.background = _trailOn ? 'rgba(0,204,255,.30)' : 'rgba(0,204,255,.12)';
+        }
+        async function toggleTrail(){
+            _trailOn = !_trailOn;
+            localStorage.setItem('trail_on', _trailOn ? '1' : '0');
+            updateTrailBtn();
+            const ok = await sendCommand({ trail: _trailOn });
+            miniToast(ok ? (_trailOn ? '📉 Trailing ON — 1R profit ke baad SL follow karega' : 'Trailing OFF') : 'Command fail', ok);
+        }
+        updateTrailBtn();
 
         // ===== Auto-sync: MT5 se band hue trades ka result Firebase se lo =====
         async function syncMT5Results() {
