@@ -559,6 +559,43 @@
         function isCrypto(pair) {
             return CRYPTO_PAIRS.includes(pair.toUpperCase());
         }
+        // Contract size per pair (majors auto, unknown pairs editable+persisted)
+        function getContractSize(pair){
+            pair = pair.toUpperCase();
+            const ov = localStorage.getItem('cs_' + pair);
+            if (ov && parseFloat(ov) > 0) return parseFloat(ov);
+            if (pair === 'XAUUSD') return 100;
+            if (pair === 'XAGUSD') return 5000;
+            if (pair === 'BTCUSD' || pair === 'ETHUSD') return 1;
+            if (!isCrypto(pair)) return 100000;   // forex (incl JPY)
+            return 1;                             // other crypto — MT5 spec se set karo
+        }
+        function saveContract(){
+            const a = window.lastAnalysis;
+            const v = parseFloat(document.getElementById('editContract')?.value);
+            if (a && v > 0) localStorage.setItem('cs_' + a.pair.toUpperCase(), String(v));
+        }
+        // MT5 se aayi symbol specs (auto SL/TP $)
+        window.symbolSpecs = {};
+        function getSpec(pair){ return (window.symbolSpecs || {})[pair.toUpperCase()]; }
+        function contractDefault(pair){
+            const s = getSpec(pair);
+            if (s && s.cs > 0) return s.cs;
+            return getContractSize(pair);
+        }
+        async function loadSymbolSpecs(){
+            const fbUrl = localStorage.getItem('fb_url');
+            if(!fbUrl) return;
+            try{
+                const res = await fetch(`${fbUrl}/fxbridge/specs.json`);
+                if(!res.ok) return;
+                const data = await res.json();
+                if(data && typeof data === 'object'){
+                    window.symbolSpecs = data;
+                    if(document.getElementById('editContract')) updateDollarValues();
+                }
+            }catch(e){}
+        }
         let selectedPair = null;
         const analysisCache = {}; // { 'PAIR_interval': { analysis, confluence, timestamp } }
         let selectedInterval = '1h';
@@ -586,6 +623,8 @@
             setTimeout(syncMT5Results, 3000);      // load ke baad ek baar
             setInterval(syncMT5Results, 15000);    // har 15 sec auto-sync
             showTip();                             // Trading Gyaan
+            loadSymbolSpecs();                     // MT5 symbol specs (auto SL/TP $)
+            setInterval(loadSymbolSpecs, 60000);
         });
 
         // ===== Trading Gyaan: rotating educational tips =====
@@ -1243,6 +1282,10 @@
                         <input type="number" step="0.01" min="0.01" id="editLots" value="${pair === 'ETHUSD' ? '0.10' : '0.01'}" oninput="updateDollarValues()" style="width:110px; padding:6px 8px; background:rgba(255,255,255,0.06); border:1px solid #333; color:#e0e0e0; border-radius:6px; font-size:13px; font-weight:600; text-align:right; font-family:inherit;">
                     </div>
                     <div class="analysis-row">
+                        <span class="analysis-label">📐 Contract Size ✏️<br><span style="font-size:9px; color:#666;">MT5 se auto · ya daalo</span></span>
+                        <input type="number" step="any" min="0" id="editContract" value="${contractDefault(pair)}" oninput="saveContract(); updateDollarValues();" style="width:110px; padding:6px 8px; background:rgba(255,255,255,0.06); border:1px solid #333; color:#e0e0e0; border-radius:6px; font-size:13px; font-weight:600; text-align:right; font-family:inherit;">
+                    </div>
+                    <div class="analysis-row">
                         <span class="analysis-label">📍 Entry ✏️</span>
                         <input type="number" step="any" id="editEntry" value="${analysis.entryZone}" oninput="updateDollarValues()" style="width:110px; padding:6px 8px; background:rgba(255,184,0,0.1); border:1px solid rgba(255,184,0,0.4); color:#FFB800; border-radius:6px; font-size:13px; font-weight:600; text-align:right; font-family:inherit;">
                     </div>
@@ -1353,11 +1396,13 @@
                 return;
             }
 
+            const spec = getSpec(a.pair);
+            const csField = parseFloat(document.getElementById('editContract')?.value);
+            const cs = (csField > 0) ? csField : getContractSize(a.pair);
             const toUSD = (diff, refPrice) => {
-                if (a.pair === 'XAUUSD') return diff * 100 * lots;
-                if (isCrypto(a.pair)) return diff * lots;   // 1 lot = 1 coin
-                if (a.pair.endsWith('JPY')) return (diff * 100000 * lots) / refPrice;
-                return diff * 100000 * lots;
+                if (spec && spec.ts > 0 && spec.tv > 0) return (diff / spec.ts) * spec.tv * lots;  // MT5 exact
+                if (a.pair.toUpperCase().endsWith('JPY')) return (diff * cs * lots) / refPrice;
+                return diff * cs * lots;
             };
 
             // Direction check PEHLE - galat side ka SL/TP koi valid risk/reward nahi hai
@@ -1368,14 +1413,14 @@
                 slSpan.textContent = '⚠️ INVALID';
             } else {
                 const risk = Math.abs(toUSD(entry - sl, sl));
-                slSpan.textContent = `(−$${risk.toFixed(2)})`;
+                slSpan.textContent = risk < 0.005 ? '(⚙️ set Contract)' : `(−$${risk.toFixed(2)})`;
             }
 
             if (badTP) {
                 tpSpan.textContent = '⚠️ INVALID';
             } else {
                 const reward = Math.abs(toUSD(tp - entry, tp));
-                tpSpan.textContent = `(+$${reward.toFixed(2)})`;
+                tpSpan.textContent = reward < 0.005 ? '(⚙️ set Contract)' : `(+$${reward.toFixed(2)})`;
             }
 
             // Pip / point distance - tight SL turant dikh jaye
