@@ -1164,6 +1164,32 @@
                 tp: tp
             };
 
+            // ===== AUTO RE-CHECK: bhejne se pehle LIVE price verify (stale/late-entry guard) =====
+            try {
+                const rcKey = localStorage.getItem('td_api_key');
+                if (rcKey) {
+                    const q = await tdFetch('quote', toTDSymbol(a.pair), rcKey, '1min');
+                    const live = parseFloat(q?.close);
+                    if (!isNaN(live) && live > 0) {
+                        const isBuy = a.signal === 'BUY';
+                        const slDist = Math.abs(entry - sl);
+                        const atr = a.rawAtr || slDist;
+                        const dec = a.decimals || 2;
+                        // 1. Price SL zone me pahunch gaya (trend palat) -> HARD BLOCK
+                        if ((isBuy && live <= sl) || (!isBuy && live >= sl)) {
+                            return alert(`❌ TREND PALAT GAYA!\n\nAbhi price: ${live.toFixed(dec)}\nSL zone: ${sl}\n\nOrder cancel — dobara Analyze karo.`);
+                        }
+                        // 2. MARKET mode: price bahut aage nikal gaya (late/chasing) -> confirm
+                        if (isMarketMode) {
+                            const moved = isBuy ? (live - entry) : (entry - live);
+                            if (moved > Math.max(0.6 * slDist, atr)) {
+                                if (!confirm(`⚠️ TREND AAGE NIKAL CHUKA!\n\nEntry (analyze): ${entry}\nAbhi price: ${live.toFixed(dec)}\nMove: ${Math.abs(live - entry).toFixed(dec)}\n\nLate entry — RRR kharab, SL door ho gaya.\nBEHTAR: Cancel karke dobara Analyze karo.\n\nPhir bhi bhejna hai?`)) return;
+                            }
+                        }
+                    }
+                }
+            } catch (e) { /* re-check fail -> normal flow, block mat karo */ }
+
             if (!confirm(`MT5 pe ye order bhejna hai?\n\n${a.pair} ${orderType}\nLots: ${lots}\nEntry: ${entry}\nSL: ${sl}\nTP: ${tp}`)) return;
 
             window._sendingOrder = true;
