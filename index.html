@@ -1248,6 +1248,25 @@
             if(ok) recordTrade();
         }
 
+        // Signal ki umar track karo (kab se ye direction chal raha) — late-entry guard
+        function getSignalAge(pair, signal, grade){
+            if (!signal || signal === 'HOLD') return null;
+            const key = 'sig_' + pair.toUpperCase();
+            let prev = null;
+            try { prev = JSON.parse(localStorage.getItem(key)); } catch(e){}
+            const now = Date.now();
+            const since = (prev && prev.dir === signal) ? prev.since : now;
+            localStorage.setItem(key, JSON.stringify({ dir: signal, grade: grade || '', since }));
+            return since;
+        }
+        function fmtAge(ms){
+            const m = Math.floor(ms / 60000);
+            if (m < 1) return 'abhi (fresh)';
+            if (m < 60) return m + 'm';
+            const h = Math.floor(m / 60), rm = m % 60;
+            return h + 'h ' + rm + 'm';
+        }
+
         function displayAnalysis(pair, analysis, confluence = [], timestamp = null, fromCache = false) {
             const panel = document.getElementById('analysisPanel');
 
@@ -1258,6 +1277,16 @@
             };
             const gaugeColor = signalColors[analysis.signal] || signalColors['HOLD'];
             const riskText = analysis.riskScore < 40 ? 'Low Risk' : analysis.riskScore < 70 ? 'Medium Risk' : 'High Risk';
+
+            // Signal age (kab se ye direction) — purana = late entry risk
+            const sigSince = getSignalAge(analysis.pair, analysis.signal);
+            let ageHTML = '';
+            if (sigSince) {
+                const ageMs = Date.now() - sigSince;
+                const isOld = ageMs > 2 * 3600 * 1000;   // 2 ghante+
+                const sinceTime = new Date(sigSince).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+                ageHTML = `<div style="text-align:center; margin-top:8px; padding:6px 10px; border-radius:8px; font-size:12px; color:${isOld ? '#FF6B6B' : '#9C947F'}; ${isOld ? 'background:rgba(255,68,68,.12); border:1px solid rgba(255,68,68,.4);' : ''}">🕐 Signal age: <b>${fmtAge(ageMs)}</b> · ${analysis.signal} since ${sinceTime}${isOld ? '<br>⚠️ Purana signal — move already ho chuka ho sakta, late entry risk' : ''}</div>`;
+            }
 
             // Signal quality score
             const q = computeQuality(analysis, confluence);
@@ -1323,6 +1352,7 @@
                             <div class="risk-level">${riskText} • RRR ${analysis.rrr}:1 • ${analysis.confidence}% Confidence</div>
                         </div>
                     </div>
+                    ${ageHTML}
                 </div>
 
                 ${qualityHTML}
