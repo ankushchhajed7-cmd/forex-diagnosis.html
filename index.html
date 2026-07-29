@@ -1202,11 +1202,50 @@
                 if (!res.ok) throw new Error('HTTP ' + res.status);
                 await res.json();
                 alert('✅ Order cloud pe bhej diya!\nVPS ka EA ~10 sec me place karega.\n\nID: ' + orderId);
+                return true;
             } catch (e) {
                 alert('❌ Bhejne me problem: ' + e.message + '\n\nFirebase URL aur rules check karo.');
+                return false;
             } finally {
                 setTimeout(() => { window._sendingOrder = false; }, 3000);
             }
+        }
+
+        // ===== QUICK TRADE (personal only): TP $1 / SL $2.50 -> MT5 bhejo + record =====
+        async function quickFixedTrade(){
+            const a = window.lastAnalysis;
+            if(!a || a.signal === 'HOLD') return alert('HOLD signal pe quick trade nahi ho sakta');
+            const isBuy = a.signal === 'BUY';
+            const price = a.rawPrice;
+            const dec = a.decimals || 2;
+            const lots = parseFloat(document.getElementById('editLots')?.value) || 0.01;
+
+            // $ per 1.0 price move (MT5 spec > contract-size fallback)
+            const spec = getSpec(a.pair);
+            const csField = parseFloat(document.getElementById('editContract')?.value);
+            const cs = (csField > 0) ? csField : getContractSize(a.pair);
+            let usdPerUnit;
+            if (spec && spec.ts > 0 && spec.tv > 0) usdPerUnit = (spec.tv / spec.ts) * lots;
+            else if (a.pair.toUpperCase().endsWith('JPY')) usdPerUnit = (cs * lots) / price;
+            else usdPerUnit = cs * lots;
+            if(!usdPerUnit || usdPerUnit <= 0) return alert('Contract Size set karo pehle ($ calc ke liye)');
+
+            const slDist = 2.5 / usdPerUnit;   // $2.50 loss
+            const tpDist = 1.0 / usdPerUnit;   // $1.00 profit
+            const entry = price;
+            const sl = isBuy ? (entry - slDist) : (entry + slDist);
+            const tp = isBuy ? (entry + tpDist) : (entry - tpDist);
+
+            // fields set karo (existing send + record inhi ko use karte hain)
+            document.getElementById('editEntry').value = entry.toFixed(dec);
+            document.getElementById('editSL').value = sl.toFixed(dec);
+            document.getElementById('editTP').value = tp.toFixed(dec);
+            updateDollarValues();
+            localStorage.setItem('entry_mode', 'MARKET');   // quick = market order
+
+            // sendToMT5 apna confirm + live re-check karega; success pe hi record hoga
+            const ok = await sendToMT5();
+            if(ok) recordTrade();
         }
 
         function displayAnalysis(pair, analysis, confluence = [], timestamp = null, fromCache = false) {
@@ -1367,7 +1406,10 @@
                     <button class="btn-secondary" onclick="savAnalysis()">💾 Save</button>
                 </div>
                 ${analysis.signal !== 'HOLD' ? `
-                <button onclick="sendToMT5()" style="width:100%; margin-top:10px; padding:14px; background: linear-gradient(135deg, #0088cc 0%, #005f8f 100%); color:#fff; font-weight:700; font-size:14px;">
+                <button onclick="quickFixedTrade()" style="width:100%; margin-top:10px; padding:14px; background: linear-gradient(135deg, #FFB800 0%, #E09600 100%); color:#000; font-weight:700; font-size:14px;">
+                    ⚡ Quick Trade · TP $1 / SL $2.50 → MT5
+                </button>
+                <button onclick="sendToMT5()" style="width:100%; margin-top:8px; padding:14px; background: linear-gradient(135deg, #0088cc 0%, #005f8f 100%); color:#fff; font-weight:700; font-size:14px;">
                     🚀 Send Order to MT5
                 </button>
                 <button onclick="recordTrade()" style="width:100%; margin-top:8px; padding:14px; background: linear-gradient(135deg, #00FF96 0%, #00CC7A 100%); color:#000; font-weight:700; font-size:14px;">
