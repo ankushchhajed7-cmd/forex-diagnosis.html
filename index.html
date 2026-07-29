@@ -902,6 +902,13 @@
 
             const price = livePrice;
             const ema200 = parseFloat(emaData.values?.[0]?.ema || 0) || null;
+
+            // Trend start (Supertrend flip) - market-based signal age [+1 API call]
+            let trendStart = null;
+            try {
+                const tsData = await tdFetch('time_series', symbol, apiKey, interval, '&outputsize=200&timezone=UTC');
+                trendStart = computeTrendStart(tsData);
+            } catch(e) {}
             const rsi = parseFloat(rsiData.values?.[0]?.rsi || 50);
             const rsiSignal = rsi > 70 ? 'OVERBOUGHT' : rsi < 30 ? 'OVERSOLD' : 'NEUTRAL';
 
@@ -938,6 +945,7 @@
                 rawPrice: price,
                 rawAtr: atr,
                 ema200,
+                trendStart,
                 decimals: decimals,
                 riskScore,
                 confidence,
@@ -1267,6 +1275,51 @@
             return h + 'h ' + rm + 'm';
         }
 
+        // Local Supertrend direction (1=bull, -1=bear) per bar
+        function stDirection(H, L, C, period, mult){
+            const n = C.length;
+            if (n < period + 2) return null;
+            const atr = new Array(n).fill(0);
+            let s = 0;
+            for (let i = 1; i <= period; i++)
+                s += Math.max(H[i]-L[i], Math.abs(H[i]-C[i-1]), Math.abs(L[i]-C[i-1]));
+            atr[period] = s / period;
+            for (let i = period+1; i < n; i++){
+                const tr = Math.max(H[i]-L[i], Math.abs(H[i]-C[i-1]), Math.abs(L[i]-C[i-1]));
+                atr[i] = (atr[i-1]*(period-1)+tr)/period;
+            }
+            const fU=new Array(n).fill(0), fL=new Array(n).fill(0), st=new Array(n).fill(0), dir=new Array(n).fill(-1);
+            for (let i = period; i < n; i++){
+                const hl2=(H[i]+L[i])/2, bU=hl2+mult*atr[i], bL=hl2-mult*atr[i];
+                if (i === period){ fU[i]=bU; fL[i]=bL; st[i]=bU; dir[i]=-1; continue; }
+                fU[i] = (bU < fU[i-1] || C[i-1] > fU[i-1]) ? bU : fU[i-1];
+                fL[i] = (bL > fL[i-1] || C[i-1] < fL[i-1]) ? bL : fL[i-1];
+                if (st[i-1] === fU[i-1]) st[i] = (C[i] <= fU[i]) ? fU[i] : fL[i];
+                else st[i] = (C[i] >= fL[i]) ? fL[i] : fU[i];
+                dir[i] = (st[i] === fL[i]) ? 1 : -1;
+            }
+            return dir;
+        }
+        // Trend start timestamp (ms, UTC) from time_series -> Supertrend flip
+        function computeTrendStart(tsData){
+            const vals = tsData && tsData.values;
+            if (!Array.isArray(vals) || vals.length < 30) return null;
+            const asc = vals.slice().reverse();   // TwelveData DESC -> ASC
+            const H = asc.map(v => parseFloat(v.high));
+            const L = asc.map(v => parseFloat(v.low));
+            const C = asc.map(v => parseFloat(v.close));
+            const dt = asc.map(v => v.datetime);
+            const dir = stDirection(H, L, C, 10, 3);
+            if (!dir) return null;
+            const n = dir.length, last = dir[n-1];
+            let startIdx = n-1;
+            for (let i = n-1; i >= 10; i--){ if (dir[i] === last) startIdx = i; else break; }
+            const t = dt[startIdx];
+            if (!t) return null;
+            const ms = new Date(t.replace(' ','T') + 'Z').getTime();
+            return isNaN(ms) ? null : ms;
+        }
+
         function displayAnalysis(pair, analysis, confluence = [], timestamp = null, fromCache = false) {
             const panel = document.getElementById('analysisPanel');
 
@@ -1278,14 +1331,16 @@
             const gaugeColor = signalColors[analysis.signal] || signalColors['HOLD'];
             const riskText = analysis.riskScore < 40 ? 'Low Risk' : analysis.riskScore < 70 ? 'Medium Risk' : 'High Risk';
 
-            // Signal age (kab se ye direction) — purana = late entry risk
-            const sigSince = getSignalAge(analysis.pair, analysis.signal);
+            // Signal age — market-based (Supertrend flip) primary, warna open-based fallback
+            let sinceTs = analysis.trendStart || null;
+            let ageLabel = 'Trend';
+            if (!sinceTs) { sinceTs = getSignalAge(analysis.pair, analysis.signal); ageLabel = 'Signal'; }
             let ageHTML = '';
-            if (sigSince) {
-                const ageMs = Date.now() - sigSince;
+            if (sinceTs) {
+                const ageMs = Date.now() - sinceTs;
                 const isOld = ageMs > 2 * 3600 * 1000;   // 2 ghante+
-                const sinceTime = new Date(sigSince).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
-                ageHTML = `<div style="text-align:center; margin-top:8px; padding:6px 10px; border-radius:8px; font-size:12px; color:${isOld ? '#FF6B6B' : '#9C947F'}; ${isOld ? 'background:rgba(255,68,68,.12); border:1px solid rgba(255,68,68,.4);' : ''}">🕐 Signal age: <b>${fmtAge(ageMs)}</b> · ${analysis.signal} since ${sinceTime}${isOld ? '<br>⚠️ Purana signal — move already ho chuka ho sakta, late entry risk' : ''}</div>`;
+                const sinceTime = new Date(sinceTs).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+                ageHTML = `<div style="text-align:center; margin-top:8px; padding:6px 10px; border-radius:8px; font-size:12px; color:${isOld ? '#FF6B6B' : '#9C947F'}; ${isOld ? 'background:rgba(255,68,68,.12); border:1px solid rgba(255,68,68,.4);' : ''}">🕐 ${ageLabel} age: <b>${fmtAge(ageMs)}</b> · ${analysis.signal} since ${sinceTime}${isOld ? '<br>⚠️ Purana signal — move already ho chuka, late entry risk' : ''}</div>`;
             }
 
             // Signal quality score
