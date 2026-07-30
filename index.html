@@ -1181,12 +1181,6 @@
             const a = window.lastAnalysis;
             if (!a || a.signal === 'HOLD') return alert('HOLD signal pe order nahi bhej sakte');
 
-            // Trend-age guard: 2h+ purana signal -> MT5 pe auto-trade BLOCK (manual record allowed)
-            if (a.trendStart && (Date.now() - a.trendStart) > 2 * 3600 * 1000) {
-                const hrs = ((Date.now() - a.trendStart) / 3600000).toFixed(1);
-                return alert(`🚫 Trend ${hrs}h PURANA hai\n\nMT5 pe auto-trade nahi jayega (late entry se bachne ke liye).\n\n✅ Fresh signal ka wait karo,\nya "Maine Ye Trade Liya" se manual track kar sakte ho.`);
-            }
-
             const fbUrl = localStorage.getItem('fb_url');
             if (!fbUrl) {
                 alert('Pehle ⚙️ API Settings me Firebase URL daalo');
