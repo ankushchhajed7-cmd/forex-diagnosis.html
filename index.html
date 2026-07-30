@@ -510,12 +510,6 @@
             <button class="tf-btn active" data-tf="1h" onclick="setTimeframe('1h', this)">1H</button>
         </div>
 
-        <!-- Auto Paper mode: signal aaye to apne aap record (MT5 pe NAHI) -->
-        <div onclick="toggleAutoPaper()" id="autoPaperBar" style="cursor:pointer; display:flex; justify-content:space-between; align-items:center; padding:11px 14px; margin-bottom:16px; border-radius:10px; background:rgba(255,184,0,.10); border:1px solid rgba(255,184,0,.35); user-select:none;">
-            <span style="font-size:12.5px; font-weight:600; color:#FFC24D;">🤖 Auto-Record (Paper) · TP $1 / SL $2.5</span>
-            <span id="autoPaperState" style="font-size:11px; font-weight:700; padding:3px 12px; border-radius:20px; background:#555; color:#fff;">OFF</span>
-        </div>
-
         <div id="pairsContainer" class="pairs-container"></div>
 
         <!-- Trading Gyaan: rotating educational tips (usable dead-space) -->
@@ -633,7 +627,6 @@
             showTip();                             // Trading Gyaan
             loadSymbolSpecs();                     // MT5 symbol specs (auto SL/TP $)
             setInterval(loadSymbolSpecs, 60000);
-            updateAutoPaperBar();                  // Auto Paper toggle state
         });
 
         // ===== Trading Gyaan: rotating educational tips =====
@@ -888,7 +881,6 @@
                 const timestamp = Date.now();
                 analysisCache[cacheKey] = { analysis, confluence, timestamp };
                 displayAnalysis(pair.toUpperCase(), analysis, confluence, timestamp, false);
-                autoPaperRecord(analysis);   // Auto Paper mode ON ho to apne aap record
             } catch (error) {
                 panel.innerHTML = `<div class="error">❌ ${error.message}</div>`;
             }
@@ -1839,58 +1831,6 @@
             alert('✅ Trade record ho gaya!\nEntry: ' + entry + '\nSL: ' + sl + '\nTP: ' + tp + '\n\nDashboard pe "My Trades" me dikhega.');
             closeAnalysisPanel();
             renderTrades();
-        }
-
-        // ===== Auto Paper mode (signal aaye to apne aap record, MT5 pe NAHI) =====
-        function updateAutoPaperBar(){
-            const on = localStorage.getItem('auto_paper') === '1';
-            const s = document.getElementById('autoPaperState');
-            const bar = document.getElementById('autoPaperBar');
-            if(!s) return;
-            s.textContent = on ? 'ON' : 'OFF';
-            s.style.background = on ? '#1f8f4d' : '#555';
-            if(bar) bar.style.background = on ? 'rgba(0,255,150,.10)' : 'rgba(255,184,0,.10)';
-        }
-        function toggleAutoPaper(){
-            const on = localStorage.getItem('auto_paper') === '1';
-            localStorage.setItem('auto_paper', on ? '0' : '1');
-            updateAutoPaperBar();
-            if(typeof miniToast === 'function')
-                miniToast(on ? 'Auto-Record OFF' : '🤖 Auto-Record ON — signal aane pe apne aap paper-record (MT5 pe nahi)', true);
-        }
-        function autoPaperRecord(a){
-            if(!a || a.signal === 'HOLD') return;
-            if(localStorage.getItem('auto_paper') !== '1') return;
-            const trades = getTrades();
-            if(trades.some(t => t.pair === a.pair && t.status === 'OPEN')) return;   // duplicate se bacho
-            const isBuy = a.signal === 'BUY';
-            const price = a.rawPrice, dec = a.decimals || 2, lots = 0.01;
-            const spec = getSpec(a.pair), cs = getContractSize(a.pair);
-            let u;
-            if (spec && spec.ts > 0 && spec.tv > 0) u = (spec.tv / spec.ts) * lots;
-            else if (a.pair.toUpperCase().endsWith('JPY')) u = (cs * lots) / price;
-            else u = cs * lots;
-            if(!u || u <= 0) return;
-            const slDist = 2.5 / u, tpDist = 1.0 / u;
-            const entry = price;
-            const sl = isBuy ? (entry - slDist) : (entry + slDist);
-            const tp = isBuy ? (entry + tpDist) : (entry - tpDist);
-            const trade = {
-                id: Date.now(), pair: a.pair, signal: a.signal,
-                orderType: a.signal + ' MARKET', entryMode: 'MARKET',
-                quality: window.lastQuality ? window.lastQuality.grade : null,
-                qualityScore: window.lastQuality ? window.lastQuality.score : null,
-                lots: lots,
-                entry: parseFloat(entry.toFixed(dec)),
-                sl: parseFloat(sl.toFixed(dec)),
-                tp: parseFloat(tp.toFixed(dec)),
-                openTime: new Date().toISOString(), status: 'OPEN',
-                filled: true, fillTime: new Date().toISOString(),
-                result: null, closeTime: null, paper: true
-            };
-            trades.unshift(trade); trades.splice(100); saveTrades(trades); renderTrades();
-            if(typeof miniToast === 'function')
-                miniToast('🤖 Paper: ' + a.pair + ' ' + a.signal + ' record (TP $1 / SL $2.5)', true);
         }
 
         function renderTrades() {
