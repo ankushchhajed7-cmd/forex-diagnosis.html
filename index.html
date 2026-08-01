@@ -873,12 +873,10 @@
                 const quote = await tdFetch('quote', symbol, apiKey, selectedInterval);
                 const livePrice = parseFloat(quote.close);
 
-                const [analysis, confluence, htf] = await Promise.all([
+                const [analysis, confluence] = await Promise.all([
                     fetchLiveAnalysis(pair.toUpperCase(), apiKey, selectedInterval, livePrice),
-                    getMultiTimeframeConfluence(pair.toUpperCase(), apiKey, livePrice),
-                    getHTFConfluence(pair.toUpperCase(), apiKey)
+                    getMultiTimeframeConfluence(pair.toUpperCase(), apiKey, livePrice)
                 ]);
-                analysis.htf = htf;
 
                 const timestamp = Date.now();
                 analysisCache[cacheKey] = { analysis, confluence, timestamp };
@@ -948,20 +946,10 @@
             const ema200 = parseFloat(emaData.values?.[0]?.ema || 0) || null;
 
             // Trend start (Supertrend flip) - market-based signal age [+1 API call]
-            // Usi data se ADX bhi nikal lete hain — extra API call ki zarurat nahi.
-            let trendStart = null, adxData = null;
+            let trendStart = null;
             try {
                 const tsData = await tdFetch('time_series', symbol, apiKey, interval, '&outputsize=200&timezone=UTC');
                 trendStart = computeTrendStart(tsData);
-                const asc = (tsData.values || []).slice().reverse();
-                if (asc.length >= 40) {
-                    adxData = calcADX(
-                        asc.map(v => parseFloat(v.high)),
-                        asc.map(v => parseFloat(v.low)),
-                        asc.map(v => parseFloat(v.close)),
-                        14
-                    );
-                }
             } catch(e) {}
             const rsi = parseFloat(rsiData.values?.[0]?.rsi || 50);
             const rsiSignal = rsi > 70 ? 'OVERBOUGHT' : rsi < 30 ? 'OVERSOLD' : 'NEUTRAL';
@@ -1000,8 +988,6 @@
                 rawAtr: atr,
                 ema200,
                 trendStart,
-                adx: adxData,
-                htf: null,
                 decimals: decimals,
                 riskScore,
                 confidence,
@@ -1035,25 +1021,25 @@
             const isBuy = analysis.signal === 'BUY';
             const rsi = Math.round(analysis.rsi);
 
-            // 1. Supertrend + MACD agree → 15 pts (signal ka core)
+            // 1. Supertrend + MACD agree → 20 pts (signal ka core)
             const macdBull = analysis.macd === 'BULLISH CROSS';
             const stMacdAgree = (isBuy && analysis.supertrend === 'BULLISH' && macdBull) ||
                                 (!isBuy && analysis.supertrend === 'BEARISH' && !macdBull);
-            if (stMacdAgree) { score += 15; reasons.push('✓ Supertrend + MACD agree'); }
+            if (stMacdAgree) { score += 20; reasons.push('✓ Supertrend + MACD agree'); }
             else reasons.push('✗ Supertrend/MACD conflict');
 
-            // 2. Multi-TF confluence → 15 pts (sab timeframes ek direction)
+            // 2. Multi-TF confluence → 20 pts (sab timeframes ek direction)
             const bull = confluence.filter(c => c.trend === 'BULLISH').length;
             const bear = confluence.filter(c => c.trend === 'BEARISH').length;
             const total = confluence.length || 1;
             const aligned = isBuy ? bull : bear;
             const confPct = aligned / total;
-            if (confPct === 1) { score += 15; reasons.push(`✓ All ${total} timeframes aligned`); }
-            else if (confPct >= 0.75) { score += 11; reasons.push(`✓ ${aligned}/${total} timeframes aligned`); }
-            else if (confPct >= 0.5) { score += 5; reasons.push(`~ ${aligned}/${total} timeframes (mixed)`); }
+            if (confPct === 1) { score += 20; reasons.push(`✓ All ${total} timeframes aligned`); }
+            else if (confPct >= 0.75) { score += 14; reasons.push(`✓ ${aligned}/${total} timeframes aligned`); }
+            else if (confPct >= 0.5) { score += 7; reasons.push(`~ ${aligned}/${total} timeframes (mixed)`); }
             else reasons.push(`✗ Only ${aligned}/${total} timeframes agree`);
 
-            // 3. ENTRY TIMING vs RSI → 20 pts (SABSE ZAROORI - late/exhausted entry se bachao)
+            // 3. ENTRY TIMING vs RSI → 25 pts (SABSE ZAROORI - late/exhausted entry se bachao)
             const contExtreme = (isBuy && rsi >= 70) || (!isBuy && rsi <= 30);   // exhausted = reversal risk
             const contStretch = (isBuy && rsi >= 65) || (!isBuy && rsi <= 35);   // getting stretched
             let reversalRisk = false;
@@ -1061,81 +1047,41 @@
                 reversalRisk = true;
                 reasons.push(`⚠️ ${isBuy ? 'BUY into OVERBOUGHT' : 'SELL into OVERSOLD'} (RSI ${rsi}) — reversal/bounce risk`);
             } else if (contStretch) {
-                score += 5;
+                score += 6;
                 reasons.push(`~ RSI ${rsi} — thoda stretched, sambhal ke`);
             } else if ((isBuy && rsi >= 50 && rsi < 65) || (!isBuy && rsi <= 50 && rsi > 35)) {
-                score += 20;
+                score += 25;
                 reasons.push(`✓ Entry timing achha (RSI ${rsi}, trend healthy)`);
             } else if ((isBuy && rsi >= 42 && rsi < 50) || (!isBuy && rsi <= 58 && rsi > 50)) {
-                score += 12;
+                score += 15;
                 reasons.push(`~ RSI ${rsi} — momentum abhi build ho raha`);
             } else {
                 reasons.push(`✗ RSI ${rsi} signal ke against`);
             }
 
-            // 4. Volatility healthy (not dead, not chaos) → 10 pts
+            // 4. Volatility healthy (not dead, not chaos) → 15 pts
             const atrPct = analysis.rawAtr / analysis.rawPrice;
             const atrMax = isCrypto(analysis.pair) ? 0.04 : 0.015;
-            if (atrPct >= 0.0005 && atrPct <= atrMax) { score += 10; reasons.push('✓ Volatility healthy'); }
+            if (atrPct >= 0.0005 && atrPct <= atrMax) { score += 15; reasons.push('✓ Volatility healthy'); }
             else if (atrPct < 0.0005) reasons.push('✗ Too quiet (weak moves)');
             else reasons.push('✗ Too volatile (risky)');
 
-            // 5. EMA200 major trend filter → 15 pts (+ overextension penalty)
+            // 5. EMA200 major trend filter → 20 pts (+ overextension penalty)
             if (analysis.ema200 && analysis.ema200 > 0) {
                 const aboveEma = analysis.rawPrice > analysis.ema200;
                 const withTrend = (isBuy && aboveEma) || (!isBuy && !aboveEma);
-                if (withTrend) { score += 15; reasons.push('✓ EMA200 bade trend ke saath'); }
-                else { score -= 4; reasons.push('⚠️ EMA200 ke against — counter-trend, risky'); }
+                if (withTrend) { score += 20; reasons.push('✓ EMA200 bade trend ke saath'); }
+                else { score -= 5; reasons.push('⚠️ EMA200 ke against — counter-trend, risky'); }
                 const distAtr = analysis.rawAtr > 0 ? Math.abs(analysis.rawPrice - analysis.ema200) / analysis.rawAtr : 0;
-                if (distAtr > 3.5) { score -= 8; reasons.push(`⚠️ Price EMA200 se ${distAtr.toFixed(1)}× ATR door — stretched, pullback risk`); }
+                if (distAtr > 3.5) { score -= 10; reasons.push(`⚠️ Price EMA200 se ${distAtr.toFixed(1)}× ATR door — stretched, pullback risk`); }
             } else {
-                score += 10; reasons.push('~ EMA200 data N/A');
-            }
-
-            // 6. ADX (14) trend strength → 10 pts
-            const a = analysis.adx;
-            let adxAgainst = false;
-            if (a) {
-                const adxAgree = (isBuy && a.dir === 'BULLISH') || (!isBuy && a.dir === 'BEARISH');
-                if (a.adx >= 25 && adxAgree) {
-                    score += 10; reasons.push(`✓ ADX ${a.adx} — ${a.state}, DI signal ke saath`);
-                } else if (a.adx >= 25 && !adxAgree) {
-                    score += 1; adxAgainst = true;
-                    reasons.push(`⚠️ ADX ${a.adx} strong hai par DI ${a.dir} — trend tumhare against`);
-                } else if (a.adx >= 20) {
-                    score += 5; reasons.push(`~ ADX ${a.adx} — ${a.state}`);
-                } else {
-                    reasons.push(`✗ ADX ${a.adx} — range market, breakout ka wait karo`);
-                }
-                if (a.adx >= 50) reasons.push('⚠️ ADX 50+ — move thak sakta hai, TP jaldi lo ya trail karo');
-            } else {
-                score += 6; reasons.push('~ ADX data N/A');
-            }
-
-            // 7. HIGHER TF (4H + Daily) filter → 15 pts
-            const hv = htfVerdict(analysis.signal, analysis.htf);
-            if (hv) {
-                score += hv.pts;
-                const mark = hv.grade === 'ALIGNED' ? '✓' : hv.grade === 'BLOCKED' ? '✗' : '~';
-                reasons.push(`${mark} HTF ${hv.grade} — ${hv.text}`);
-            } else {
-                score += 8; reasons.push('~ HTF (4H/Daily) data N/A');
+                score += 14; reasons.push('~ EMA200 data N/A');
             }
 
             // ---- REVERSAL-RISK GATE: exhaustion me "high probability" nahi ho sakta ----
             if (reversalRisk) {
                 score = Math.min(score, 55);   // MODERATE se upar nahi
                 reasons.push('💡 Behtar: pullback ka wait karo ya LIMIT order lagao — market chase mat karo');
-            }
-            // ---- HTF GATE: bada trend ulta ho to STRONG kabhi nahi ----
-            if (hv && hv.blocked) {
-                score = Math.min(score, 45);   // WEAK
-                reasons.push('🚫 4H + Daily dono against — bade trend ke khilaaf mat jao');
-            }
-            // ---- ADX GATE: strong trend tumhare against ----
-            if (adxAgainst) {
-                score = Math.min(score, 58);
-                reasons.push('💡 ADX strong ulti direction me — ya to reversal confirm hone do, ya skip');
             }
             score = Math.max(0, Math.min(100, score));
 
@@ -1144,7 +1090,7 @@
             else if (score >= 50) { grade = 'MODERATE'; color = '#FFB800'; }
             else { grade = 'WEAK'; color = '#FF4444'; }
 
-            return { score, grade, color, reasons, reversalRisk, htf: hv, adxAgainst };
+            return { score, grade, color, reasons, reversalRisk };
         }
 
         function getSLMult(pair) {
@@ -1416,143 +1362,91 @@
             return isNaN(ms) ? null : ms;
         }
 
-        // ═══════════ ADX (Wilder 14) — local calc, ZERO extra API call ═══════════
-        // H/L/C = ascending (purana -> naya) arrays. Returns {adx, plusDI, minusDI, dir, state}
-        function calcADX(H, L, C, period = 14){
-            const n = C.length;
-            if (n < period * 2 + 2) return null;
-            const tr = [], pDM = [], mDM = [];
-            for (let i = 1; i < n; i++){
-                const up = H[i] - H[i-1], dn = L[i-1] - L[i];
-                pDM.push(up > dn && up > 0 ? up : 0);
-                mDM.push(dn > up && dn > 0 ? dn : 0);
-                tr.push(Math.max(H[i]-L[i], Math.abs(H[i]-C[i-1]), Math.abs(L[i]-C[i-1])));
-            }
-            // Wilder smoothing (running sum — simple average nahi)
-            const wilder = a => {
-                const out = []; let s = 0;
-                for (let i = 0; i < period; i++) s += a[i];
-                out.push(s);
-                for (let i = period; i < a.length; i++){ s = s - s/period + a[i]; out.push(s); }
-                return out;
-            };
-            const trS = wilder(tr), pS = wilder(pDM), mS = wilder(mDM);
-            const dx = []; let pdi = 0, mdi = 0;
-            for (let i = 0; i < trS.length; i++){
-                if (!trS[i]) { dx.push(0); continue; }
-                pdi = 100 * pS[i] / trS[i];
-                mdi = 100 * mS[i] / trS[i];
-                const sum = pdi + mdi;
-                dx.push(sum ? 100 * Math.abs(pdi - mdi) / sum : 0);
-            }
-            if (dx.length < period) return null;
-            let adx = dx.slice(0, period).reduce((a,b) => a+b, 0) / period;
-            for (let i = period; i < dx.length; i++) adx = (adx*(period-1) + dx[i]) / period;
+        // ===== 30 AI Agents Vote (existing indicators se, no extra API) =====
+        function computeAgentVotes(analysis, confluence, quality) {
+            const st = analysis.supertrend === 'BULLISH' ? 1 : -1;
+            const stVote = st > 0 ? 'BUY' : 'SELL';
+            const macdBull = analysis.macd === 'BULLISH CROSS';
+            const rsi = analysis.rsi;
+            const price = analysis.rawPrice, atr = analysis.rawAtr || 0;
+            const ema = analysis.ema200 || 0;
+            const emaDist = (ema > 0 && atr > 0) ? (price - ema) / atr : 0;
+            const atrPct = price > 0 ? atr / price : 0;
+            const bull = confluence.filter(c => c.trend === 'BULLISH').length;
+            const bear = confluence.filter(c => c.trend === 'BEARISH').length;
+            const total = confluence.length || 4;
+            const grade = quality ? quality.grade : null;
+            const revRisk = quality ? quality.reversalRisk : false;
+            const risk = analysis.riskScore || 50;
+            const cry = /BTC|ETH|LTC|XRP|BCH|ADA|SOL|DOGE|LINK/.test((analysis.pair || '').toUpperCase());
+            const volMax = cry ? 0.04 : 0.015;
+            const volHealthy = atrPct >= 0.0005 && atrPct <= volMax;
+            const hourUTC = new Date().getUTCHours();
+            const activeSession = hourUTC >= 7 && hourUTC < 21;
+            const fresh = analysis.trendStart ? ((Date.now() - analysis.trendStart) < 2 * 3600 * 1000) : true;
+            const sig = analysis.signal;
 
-            let state;
-            if (adx < 20)      state = 'RANGE — trend nahi hai';
-            else if (adx < 25) state = 'WEAK — trend ban raha';
-            else if (adx < 40) state = 'STRONG TREND';
-            else if (adx < 50) state = 'VERY STRONG';
-            else               state = 'EXTREME — exhaustion risk';
+            const A = [];
+            const add = (name, vote, reason) => A.push({ name, vote, reason });
 
-            return {
-                adx: +adx.toFixed(1),
-                plusDI: +pdi.toFixed(1),
-                minusDI: +mdi.toFixed(1),
-                dir: pdi > mdi ? 'BULLISH' : 'BEARISH',
-                state,
-                trending: adx >= 25
-            };
+            add('Trend Agent', stVote, 'Supertrend ' + (st > 0 ? 'bullish' : 'bearish'));
+            add('MACD Agent', macdBull ? 'BUY' : 'SELL', macdBull ? 'Bullish cross' : 'Bearish/none');
+            add('Momentum Agent', rsi >= 55 ? 'BUY' : rsi <= 45 ? 'SELL' : 'HOLD', 'RSI ' + Math.round(rsi));
+            add('RSI Zone Agent', (rsi >= 50 && rsi <= 68) ? 'BUY' : (rsi >= 32 && rsi < 50) ? 'SELL' : 'HOLD', 'Trend zone');
+            add('Reversal Agent', rsi >= 70 ? 'SELL' : rsi <= 30 ? 'BUY' : 'HOLD', rsi >= 70 ? 'Overbought' : rsi <= 30 ? 'Oversold' : 'Neutral');
+            add('EMA200 Agent', ema > 0 ? (price > ema ? 'BUY' : 'SELL') : 'HOLD', ema > 0 ? (price > ema ? 'Above EMA200' : 'Below EMA200') : 'No data');
+            add('Mean-Reversion Agent', emaDist > 2.5 ? 'SELL' : emaDist < -2.5 ? 'BUY' : 'HOLD', 'Dist ' + emaDist.toFixed(1) + 'x ATR');
+            add('Overextension Agent', emaDist > 3.5 ? 'SELL' : emaDist < -3.5 ? 'BUY' : 'HOLD', Math.abs(emaDist) > 3.5 ? 'Stretched' : 'OK');
+            add('Volatility Agent', volHealthy ? stVote : 'HOLD', volHealthy ? 'ATR healthy' : 'ATR off');
+            add('Confluence Agent', bull > bear ? 'BUY' : bear > bull ? 'SELL' : 'HOLD', bull + 'up/' + bear + 'down');
+            confluence.forEach((c) => add('TF · ' + (c.label || 'TF'), c.trend === 'BULLISH' ? 'BUY' : c.trend === 'BEARISH' ? 'SELL' : 'HOLD', (c.label || '') + ' ' + (c.trend || 'n/a')));
+            add('Trend-Strength Agent', (bull === total || bear === total) ? stVote : 'HOLD', (bull === total || bear === total) ? 'All aligned' : 'Mixed TF');
+            add('Regime Agent', Math.abs(bull - bear) >= 3 ? stVote : 'HOLD', Math.abs(bull - bear) >= 3 ? 'Trending' : 'Choppy');
+            add('Breakout Agent', (volHealthy && atrPct > volMax * 0.4) ? stVote : 'HOLD', 'Volatility push');
+            add('Momentum-Confirm Agent', (rsi >= 52 && macdBull) ? 'BUY' : (rsi <= 48 && !macdBull) ? 'SELL' : 'HOLD', 'RSI+MACD');
+            add('Trend+MACD Agent', (st > 0 && macdBull) ? 'BUY' : (st < 0 && !macdBull) ? 'SELL' : 'HOLD', 'ST+MACD combo');
+            add('Bollinger Agent', (ema > 0 && price >= ema + 2 * atr) ? 'SELL' : (ema > 0 && price <= ema - 2 * atr) ? 'BUY' : (ema > 0 ? stVote : 'HOLD'), 'Band position');
+            add('VWAP Agent', ema > 0 ? (price > ema ? 'BUY' : 'SELL') : 'HOLD', 'Fair-value (EMA)');
+            add('Session Agent', activeSession ? stVote : 'HOLD', activeSession ? 'London/NY active' : 'Quiet session');
+            add('Freshness Agent', fresh ? stVote : 'HOLD', fresh ? 'Fresh trend' : 'Old trend');
+            add('Risk Agent', risk < 70 ? stVote : 'HOLD', 'Risk ' + Math.round(risk));
+            add('Confidence Agent', grade === 'WEAK' ? 'HOLD' : (sig === 'HOLD' ? 'HOLD' : sig), 'Quality ' + (grade || '-'));
+            add('Reversal-Gate Agent', revRisk ? 'HOLD' : stVote, revRisk ? 'Reversal risk' : 'Clear');
+            add('Range-Position Agent', rsi >= 60 ? 'BUY' : rsi <= 40 ? 'SELL' : 'HOLD', 'RSI band');
+            add('Participation Agent', volHealthy ? stVote : 'HOLD', volHealthy ? 'Active' : 'Thin');
+            add('Pullback Agent', (Math.abs(emaDist) < 1.5 && ema > 0) ? stVote : 'HOLD', Math.abs(emaDist) < 1.5 ? 'Near value' : 'Extended');
+            add('Final AI Agent', sig === 'HOLD' ? 'HOLD' : sig, 'Overall signal');
+
+            let buy = 0, sell = 0, hold = 0;
+            A.forEach(a => { if (a.vote === 'BUY') buy++; else if (a.vote === 'SELL') sell++; else hold++; });
+            const n = A.length;
+            let verdict, vcolor;
+            if (buy >= n * 0.6) { verdict = 'STRONG BUY'; vcolor = '#00FF96'; }
+            else if (sell >= n * 0.6) { verdict = 'STRONG SELL'; vcolor = '#FF5B5B'; }
+            else if (buy > sell && buy >= n * 0.4) { verdict = 'BUY (lean)'; vcolor = '#00FF96'; }
+            else if (sell > buy && sell >= n * 0.4) { verdict = 'SELL (lean)'; vcolor = '#FF5B5B'; }
+            else { verdict = 'NEUTRAL / MIXED'; vcolor = '#FFB800'; }
+            return { agents: A, buy, sell, hold, total: n, verdict, vcolor };
         }
-
-        function emaLast(arr, p){
-            if (!arr || arr.length < p) return null;
-            const k = 2/(p+1);
-            let e = arr.slice(0, p).reduce((a,b) => a+b, 0) / p;
-            for (let i = p; i < arr.length; i++) e = arr[i]*k + e*(1-k);
-            return e;
-        }
-
-        // ═══════════ HIGHER TIMEFRAME (4H + Daily) FILTER ═══════════
-        // 4H 30 min cache, Daily 6 ghante cache — TwelveData ka 8 calls/min bachane ke liye.
-        const HTF_TTL = { '4h': 30*60*1000, '1day': 6*60*60*1000 };
-
-        async function fetchHTFSeries(symbol, apiKey, interval){
-            const key = `htf_${symbol}_${interval}`;
-            try {
-                const c = JSON.parse(localStorage.getItem(key) || 'null');
-                if (c && c.v && (Date.now() - c.t) < HTF_TTL[interval]) return c.v;
-            } catch(e){}
-
-            const data = await tdFetch('time_series', symbol, apiKey, interval, '&outputsize=250&timezone=UTC');
-            const vals = data && data.values;
-            if (!Array.isArray(vals) || vals.length < 60) return null;
-            // Compact [high, low, close] — localStorage bharne se bachao
-            const rows = vals.map(x => [parseFloat(x.high), parseFloat(x.low), parseFloat(x.close)]);
-            try { localStorage.setItem(key, JSON.stringify({ t: Date.now(), v: rows })); } catch(e){}
-            return rows;
-        }
-
-        // Ek HTF ka bias: Supertrend + EMA50 + EMA200 + ADX
-        function htfBias(rows, label){
-            if (!rows || rows.length < 60) return { label, trend: 'N/A', score: 0, adx: null };
-            const asc = rows.slice().reverse();          // TwelveData DESC -> ASC
-            const H = asc.map(r => r[0]), L = asc.map(r => r[1]), C = asc.map(r => r[2]);
-            const px = C[C.length - 1];
-
-            const dir = stDirection(H, L, C, 10, 3);
-            const st = dir ? (dir[dir.length-1] === 1 ? 'BULLISH' : 'BEARISH') : null;
-            const e50 = emaLast(C, 50), e200 = emaLast(C, 200);
-            const adx = calcADX(H, L, C, 14);
-
-            let score = 0;
-            if (st)   score += st === 'BULLISH' ? 1 : -1;      // ±1
-            if (e50)  score += px > e50 ? 0.5 : -0.5;          // ±0.5
-            if (e200) score += px > e200 ? 1 : -1;             // ±1   (max ±2.5)
-            if (adx && adx.adx < 20) score *= 0.5;             // range me structure kamzor
-
-            const trend = score >= 1 ? 'BULLISH' : score <= -1 ? 'BEARISH' : 'NEUTRAL';
-            return { label, trend, score: +score.toFixed(2), st, adx, px, ema50: e50, ema200: e200 };
-        }
-
-        async function getHTFConfluence(pair, apiKey){
-            const symbol = toTDSymbol(pair);
-            const out = { h4: { label: '4 HOUR', trend: 'N/A', score: 0, adx: null },
-                          d1: { label: 'DAILY',  trend: 'N/A', score: 0, adx: null } };
-            try { out.h4 = htfBias(await fetchHTFSeries(symbol, apiKey, '4h'),   '4 HOUR'); } catch(e){}
-            try { out.d1 = htfBias(await fetchHTFSeries(symbol, apiKey, '1day'), 'DAILY');  } catch(e){}
-            return out;
-        }
-
-        // Signal vs HTF — grade + kitne points milenge
-        function htfVerdict(signal, htf){
-            if (!htf || !signal || signal === 'HOLD') return null;
-            const want = signal === 'BUY' ? 1 : -1;
-            const s4 = (htf.h4 && typeof htf.h4.score === 'number') ? htf.h4.score : 0;
-            const sd = (htf.d1 && typeof htf.d1.score === 'number') ? htf.d1.score : 0;
-            const total = s4 + sd * 1.5;                 // Daily boss hai — weight zyada
-            const match = Math.sign(total) === want;
-            const mag = Math.abs(total);
-
-            // Dono HTF range me hain? Phir HTF ki baat pe zyada bharosa mat karo.
-            const a4 = htf.h4 && htf.h4.adx ? htf.h4.adx.adx : 99;
-            const aD = htf.d1 && htf.d1.adx ? htf.d1.adx.adx : 99;
-            const rangeBound = a4 < 20 && aD < 20;
-
-            let grade, color, text, pts;
-            if (match && mag >= 2.5)    { grade='ALIGNED'; color='#00FF96'; pts=15; text='4H + Daily dono signal ke saath — with-trend trade'; }
-            else if (match && mag >= 1) { grade='PARTIAL'; color='#FFB800'; pts=9;  text='HTF thoda saath hai, poora nahi — normal size'; }
-            else if (mag < 1)           { grade='NEUTRAL'; color='#888';    pts=5;  text='HTF neutral — chhota size ya skip'; }
-            else if (mag < 2.5)         { grade='AGAINST'; color='#FF8800'; pts=2;  text='HTF halka ulta — counter-trend, quick TP'; }
-            else                        { grade='BLOCKED'; color='#FF4444'; pts=0;  text='4H + Daily dono ULTA — ye trade skip karo'; }
-
-            if (rangeBound) {
-                if (grade === 'BLOCKED') { grade='AGAINST'; color='#FF8800'; pts=3; text='HTF ulta par dono range me (ADX<20) — soft block, size ghatao'; }
-                else if (grade === 'ALIGNED') { grade='PARTIAL'; color='#FFB800'; pts=9; text='HTF saath hai par 4H+Daily dono range me — pura bharosa mat karo'; }
-            }
-
-            return { grade, color, text, pts, total: +total.toFixed(2), rangeBound, blocked: grade === 'BLOCKED' };
+        function buildAgentsHTML(av) {
+            const bp = Math.round(av.buy / av.total * 100), sp = Math.round(av.sell / av.total * 100), hp = 100 - bp - sp;
+            const rows = av.agents.map(a => {
+                const col = a.vote === 'BUY' ? '#00FF96' : a.vote === 'SELL' ? '#FF5B5B' : '#FFB800';
+                const bg = a.vote === 'BUY' ? 'rgba(0,255,150,.12)' : a.vote === 'SELL' ? 'rgba(255,68,68,.12)' : 'rgba(255,184,0,.12)';
+                return `<div style="display:flex; justify-content:space-between; align-items:center; padding:6px 9px; border-radius:7px; background:#17161a; margin-bottom:4px;"><div><div style="font-size:11px; font-weight:700; color:#e8e2d5;">${a.name}</div><div style="font-size:8.5px; color:#8a8474;">${a.reason}</div></div><span style="font-size:9px; font-weight:800; padding:2px 9px; border-radius:12px; background:${bg}; color:${col};">${a.vote}</span></div>`;
+            }).join('');
+            return `<div style="background:#111013; border:1px solid rgba(217,182,94,.32); border-radius:12px; padding:14px; margin-bottom:14px;">
+                <div style="text-align:center; font-size:13px; font-weight:800; color:#D9B65E; letter-spacing:1px;">🤖 ${av.total} AI AGENTS · VOTE</div>
+                <div style="text-align:center; font-size:22px; font-weight:900; color:${av.vcolor}; margin:6px 0 2px;">${av.verdict}</div>
+                <div style="text-align:center; font-size:11px; color:#8a8474; margin-bottom:10px;">${av.buy} BUY · ${av.sell} SELL · ${av.hold} HOLD</div>
+                <div style="display:flex; height:12px; border-radius:7px; overflow:hidden; margin-bottom:12px;"><div style="width:${bp}%; background:#00FF96;"></div><div style="width:${sp}%; background:#FF5B5B;"></div><div style="width:${hp}%; background:#FFB800;"></div></div>
+                <div style="display:flex; gap:6px; margin-bottom:6px;">
+                    <div style="flex:1; text-align:center; padding:8px; border-radius:8px; background:rgba(0,255,150,.1); border:1px solid rgba(0,255,150,.3);"><div style="font-size:20px; font-weight:900; color:#00FF96;">${av.buy}</div><div style="font-size:9px; color:#00FF96;">BUY</div></div>
+                    <div style="flex:1; text-align:center; padding:8px; border-radius:8px; background:rgba(255,68,68,.1); border:1px solid rgba(255,68,68,.3);"><div style="font-size:20px; font-weight:900; color:#FF5B5B;">${av.sell}</div><div style="font-size:9px; color:#FF5B5B;">SELL</div></div>
+                    <div style="flex:1; text-align:center; padding:8px; border-radius:8px; background:rgba(255,184,0,.08); border:1px solid rgba(255,184,0,.28);"><div style="font-size:20px; font-weight:900; color:#FFB800;">${av.hold}</div><div style="font-size:9px; color:#FFB800;">HOLD</div></div>
+                </div>
+                <details><summary style="font-size:11px; color:#8a8474; cursor:pointer; padding:6px 0;">▸ Sabhi ${av.total} agents dekho</summary><div style="margin-top:8px; max-height:300px; overflow-y:auto;">${rows}</div></details>
+            </div>`;
         }
 
         function displayAnalysis(pair, analysis, confluence = [], timestamp = null, fromCache = false) {
@@ -1581,6 +1475,7 @@
             // Signal quality score
             const q = computeQuality(analysis, confluence);
             window.lastQuality = q;
+            const agentsHTML = buildAgentsHTML(computeAgentVotes(analysis, confluence, q));
             const qualityHTML = analysis.signal === 'HOLD' ? '' : `
                 <div style="background:${q.color}15; border:1px solid ${q.color}66; border-radius:10px; padding:12px 14px; margin-bottom:14px;">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
@@ -1599,32 +1494,6 @@
                       '<div style="text-align:center; margin-top:8px; font-size:11px; color:#FFB800; font-weight:700;">🟡 MODERATE - EXTRA CONFIRMATION LO</div>'}
                 </div>
             `;
-
-            // ── Higher TF (4H + Daily) filter card ──
-            const hv = q.htf;
-            const htfColor = hv ? hv.color : '#666';
-            const htfRow = b => {
-                if (!b) return '';
-                const c = b.trend === 'BULLISH' ? '#00FF96' : b.trend === 'BEARISH' ? '#FF4444' : '#888';
-                const arrow = b.trend === 'BULLISH' ? '▲' : b.trend === 'BEARISH' ? '▼' : '—';
-                const adxTxt = b.adx ? `ADX ${b.adx.adx}` : 'ADX —';
-                return `<div style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-top:1px solid #262626;">
-                    <span style="color:#ccc; font-weight:700; letter-spacing:1px; font-size:12px; flex:1;">${b.label}</span>
-                    <span style="font-size:11px; color:#777; flex:1; text-align:center;">${adxTxt}</span>
-                    <span style="color:${c}; font-weight:700; font-size:12px; flex:1; text-align:right;">${arrow} ${b.trend}</span>
-                </div>`;
-            };
-            const htfHTML = (analysis.htf && (analysis.htf.h4 || analysis.htf.d1)) ? `
-                <div style="background:${htfColor}12; border:1px solid ${htfColor}55; border-radius:10px; padding:12px 14px; margin-bottom:14px;">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
-                        <span style="font-size:12px; color:#888; letter-spacing:1px;">HIGHER TF FILTER</span>
-                        <span style="font-size:13px; font-weight:700; color:${htfColor};">${hv ? hv.grade : 'BIAS'}</span>
-                    </div>
-                    ${htfRow(analysis.htf.h4)}
-                    ${htfRow(analysis.htf.d1)}
-                    ${hv ? `<div style="text-align:center; margin-top:10px; padding-top:8px; border-top:1px solid #262626; font-size:11px; color:${htfColor}; font-weight:700;">${hv.text}<br><span style="color:#666; font-weight:400;">HTF score: ${hv.total}</span></div>` : ''}
-                </div>
-            ` : '';
 
             const bullishCount = confluence.filter(c => c.trend === 'BULLISH').length;
             const bearishCount = confluence.filter(c => c.trend === 'BEARISH').length;
@@ -1673,7 +1542,7 @@
 
                 ${qualityHTML}
 
-                ${htfHTML}
+                ${agentsHTML}
 
                 <div style="text-align:center; font-size:11px; color:#888; margin-bottom:6px;">MULTI-TIMEFRAME TREND</div>
                 ${confluenceHTML}
@@ -1690,12 +1559,6 @@
                     <div class="analysis-row">
                         <span class="analysis-label">MACD Signal</span>
                         <span class="analysis-value">${analysis.macd}</span>
-                    </div>
-                    <div class="analysis-row">
-                        <span class="analysis-label">ADX (14)${analysis.adx ? `<br><span style="font-size:9px; color:#666;">+DI ${analysis.adx.plusDI} · −DI ${analysis.adx.minusDI}</span>` : ''}</span>
-                        <span class="analysis-value" style="color:${!analysis.adx ? '#888' : analysis.adx.adx < 20 ? '#FF8800' : analysis.adx.adx >= 50 ? '#FFB800' : analysis.adx.adx >= 25 ? '#00FF96' : '#ccc'};">
-                            ${analysis.adx ? `${analysis.adx.adx} — ${analysis.adx.state}` : 'N/A'}
-                        </span>
                     </div>
                     <div class="analysis-row">
                         <span class="analysis-label">ATR High</span>
@@ -1920,11 +1783,7 @@
             const zones = a.signal === 'HOLD'
                 ? '\n⏳ No trade zone - wait for clear signal'
                 : `\n📋 Order: *${a.orderType}*\n💹 Current: ${a.currentPrice}\n📍 Entry: ${entry}\n🛑 SL: ${sl}\n🎯 TP: ${tp}\n\nRRR: ${a.rrr}:1`;
-            const adxLine = a.adx ? `\n📶 ADX: ${a.adx.adx} (${a.adx.state})` : '';
-            const htfLine = a.htf ? `\n🧭 4H: ${a.htf.h4?.trend || 'N/A'} · Daily: ${a.htf.d1?.trend || 'N/A'}` : '';
-            const q = window.lastQuality;
-            const gradeLine = (q && q.htf) ? `\n🎯 HTF Filter: ${q.htf.grade}` : '';
-            return `🤖 *${a.pair} Analysis*\n\n📊 Signal: *${a.signal}*\nRisk Score: ${a.riskScore}/100\nConfidence: ${a.confidence}%${adxLine}${htfLine}${gradeLine}\n${zones}\n\n*ForexDiagnosis*\nAI-Powered Analysis`;
+            return `🤖 *${a.pair} Analysis*\n\n📊 Signal: *${a.signal}*\nRisk Score: ${a.riskScore}/100\nConfidence: ${a.confidence}%\n${zones}\n\n*ForexDiagnosis*\nAI-Powered Analysis`;
         }
 
         // System share sheet - user apna WhatsApp (SIM 1 ya SIM 2) khud choose kar sakta hai
