@@ -1415,17 +1415,44 @@
             add('Range-Position Agent', rsi >= 60 ? 'BUY' : rsi <= 40 ? 'SELL' : 'HOLD', 'RSI band');
             add('Participation Agent', volHealthy ? stVote : 'HOLD', volHealthy ? 'Active' : 'Thin');
             add('Pullback Agent', (Math.abs(emaDist) < 1.5 && ema > 0) ? stVote : 'HOLD', Math.abs(emaDist) < 1.5 ? 'Near value' : 'Extended');
+            // ---- extra agents (total 50) ----
+            add('RSI-45 Agent', rsi > 45 ? 'BUY' : 'SELL', 'RSI vs 45');
+            add('RSI-52 Agent', rsi >= 52 ? 'BUY' : rsi <= 48 ? 'SELL' : 'HOLD', 'RSI vs 52');
+            add('RSI-58 Agent', rsi >= 58 ? 'BUY' : rsi <= 42 ? 'SELL' : 'HOLD', 'RSI vs 58');
+            add('RSI-63 Agent', rsi >= 63 ? 'BUY' : rsi <= 37 ? 'SELL' : 'HOLD', 'RSI vs 63');
+            add('EMA +1 Agent', emaDist > 1 ? 'BUY' : 'HOLD', 'Above value');
+            add('EMA -1 Agent', emaDist < -1 ? 'SELL' : 'HOLD', 'Below value');
+            add('EMA +2 Fade Agent', emaDist > 2 ? 'SELL' : 'HOLD', 'Stretched up');
+            add('EMA -2 Fade Agent', emaDist < -2 ? 'BUY' : 'HOLD', 'Stretched down');
+            add('Scalp TF Agent', confluence[0] ? (confluence[0].trend === 'BULLISH' ? 'BUY' : confluence[0].trend === 'BEARISH' ? 'SELL' : 'HOLD') : 'HOLD', '5m bias');
+            add('Swing TF Agent', confluence[3] ? (confluence[3].trend === 'BULLISH' ? 'BUY' : confluence[3].trend === 'BEARISH' ? 'SELL' : 'HOLD') : 'HOLD', '1H bias');
+            const st2 = (x, y) => (confluence[x] && confluence[y] && confluence[x].trend === confluence[y].trend) ? (confluence[x].trend === 'BULLISH' ? 'BUY' : confluence[x].trend === 'BEARISH' ? 'SELL' : 'HOLD') : 'HOLD';
+            add('Short Consensus Agent', st2(0, 1), '5m+15m');
+            add('Long Consensus Agent', st2(2, 3), '30m+1H');
+            add('Trend-Continuation Agent', ((st > 0 && bull > bear) || (st < 0 && bear > bull)) ? stVote : 'HOLD', 'ST + confluence');
+            add('Counter-Trend Agent', (ema > 0 && ((st > 0 && price < ema) || (st < 0 && price > ema))) ? 'HOLD' : stVote, 'ST vs EMA200');
+            add('Vol-Breakout Agent', atrPct > volMax * 0.5 ? stVote : 'HOLD', 'Range expansion');
+            add('Vol-Fade Agent', atrPct < 0.0008 ? 'HOLD' : stVote, atrPct < 0.0008 ? 'Dead vol' : 'Live');
+            add('Conviction Agent', (quality && quality.score >= 78) ? (sig === 'HOLD' ? 'HOLD' : sig) : 'HOLD', 'Quality score');
+            add('Consensus-3 Agent', bull >= 3 ? 'BUY' : bear >= 3 ? 'SELL' : 'HOLD', '3+ TF agree');
+            add('Momentum-Strength Agent', (rsi > 55 && st > 0) ? 'BUY' : (rsi < 45 && st < 0) ? 'SELL' : 'HOLD', 'RSI+trend');
+            add('Trend-Align Agent', (st > 0 && macdBull && ema > 0 && price > ema) ? 'BUY' : (st < 0 && !macdBull && ema > 0 && price < ema) ? 'SELL' : 'HOLD', 'Triple align');
             add('Final AI Agent', sig === 'HOLD' ? 'HOLD' : sig, 'Overall signal');
 
             let buy = 0, sell = 0, hold = 0;
             A.forEach(a => { if (a.vote === 'BUY') buy++; else if (a.vote === 'SELL') sell++; else hold++; });
             const n = A.length;
+            const win = Math.max(buy, sell);
+            const dir = buy > sell ? 'BUY' : sell > buy ? 'SELL' : null;
             let verdict, vcolor;
-            if (buy >= n * 0.6) { verdict = 'STRONG BUY'; vcolor = '#00FF96'; }
-            else if (sell >= n * 0.6) { verdict = 'STRONG SELL'; vcolor = '#FF5B5B'; }
-            else if (buy > sell && buy >= n * 0.4) { verdict = 'BUY (lean)'; vcolor = '#00FF96'; }
-            else if (sell > buy && sell >= n * 0.4) { verdict = 'SELL (lean)'; vcolor = '#FF5B5B'; }
-            else { verdict = 'NEUTRAL / MIXED'; vcolor = '#FFB800'; }
+            if (!dir || win < n * 0.35) { verdict = 'WEAK / MIXED'; vcolor = '#FFB800'; }
+            else {
+                const pct = win / n;
+                const strength = pct >= 0.65 ? 'STRONG' : pct >= 0.48 ? 'MEDIUM' : 'WEAK';
+                verdict = strength + ' ' + dir;
+                if (dir === 'BUY') vcolor = strength === 'STRONG' ? '#00FF96' : strength === 'MEDIUM' ? '#4CC98A' : '#7FB89A';
+                else vcolor = strength === 'STRONG' ? '#FF5B5B' : strength === 'MEDIUM' ? '#E06A6A' : '#C98A8A';
+            }
             return { agents: A, buy, sell, hold, total: n, verdict, vcolor };
         }
         function buildAgentsHTML(av) {
