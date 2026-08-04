@@ -50,7 +50,7 @@
 
         .subtitle {
             font-size: 11px;
-            color: #777;
+            color: #a6a6a6;
             letter-spacing: 1px;
         }
 
@@ -73,7 +73,7 @@
             font-size: 12px;
             font-weight: 700;
             background: #141414;
-            color: #777;
+            color: #a6a6a6;
             border: 1px solid #2a2a2a;
             border-radius: 6px;
             cursor: pointer;
@@ -239,7 +239,7 @@
 
         .pair-change {
             font-size: 10px;
-            color: #777;
+            color: #a6a6a6;
         }
 
         .analysis-panel {
@@ -350,7 +350,7 @@
 
         .risk-level {
             font-size: 12px;
-            color: #888;
+            color: #b3b3b3;
         }
 
         .analysis-row {
@@ -367,7 +367,7 @@
         }
 
         .analysis-label {
-            color: #888;
+            color: #b3b3b3;
         }
 
         .analysis-value {
@@ -461,7 +461,7 @@
 
         .info-text {
             font-size: 11px;
-            color: #888;
+            color: #b3b3b3;
             margin-top: 8px;
             text-align: center;
         }
@@ -1013,7 +1013,7 @@
         // Signal Quality Score (0-100) - setup kitna solid hai (win GUARANTEE nahi)
         function computeQuality(analysis, confluence) {
             if (analysis.signal === 'HOLD') {
-                return { score: 0, grade: 'NO TRADE', color: '#888', reasons: [], reversalRisk: false };
+                return { score: 0, grade: 'NO TRADE', color: '#b3b3b3', reasons: [], reversalRisk: false };
             }
 
             let score = 0;
@@ -1460,19 +1460,19 @@
             const rows = av.agents.map(a => {
                 const col = a.vote === 'BUY' ? '#00FF96' : a.vote === 'SELL' ? '#FF5B5B' : '#FFB800';
                 const bg = a.vote === 'BUY' ? 'rgba(0,255,150,.12)' : a.vote === 'SELL' ? 'rgba(255,68,68,.12)' : 'rgba(255,184,0,.12)';
-                return `<div style="display:flex; justify-content:space-between; align-items:center; padding:6px 9px; border-radius:7px; background:#17161a; margin-bottom:4px;"><div><div style="font-size:11px; font-weight:700; color:#e8e2d5;">${a.name}</div><div style="font-size:8.5px; color:#8a8474;">${a.reason}</div></div><span style="font-size:9px; font-weight:800; padding:2px 9px; border-radius:12px; background:${bg}; color:${col};">${a.vote}</span></div>`;
+                return `<div style="display:flex; justify-content:space-between; align-items:center; padding:6px 9px; border-radius:7px; background:#17161a; margin-bottom:4px;"><div><div style="font-size:11px; font-weight:700; color:#e8e2d5;">${a.name}</div><div style="font-size:8.5px; color:#bab2a2;">${a.reason}</div></div><span style="font-size:9px; font-weight:800; padding:2px 9px; border-radius:12px; background:${bg}; color:${col};">${a.vote}</span></div>`;
             }).join('');
             return `<div style="background:#111013; border:1px solid rgba(217,182,94,.32); border-radius:12px; padding:14px; margin-bottom:14px;">
                 <div style="text-align:center; font-size:13px; font-weight:800; color:#D9B65E; letter-spacing:1px;">🤖 ${av.total} AI AGENTS · VOTE</div>
                 <div style="text-align:center; font-size:22px; font-weight:900; color:${av.vcolor}; margin:6px 0 2px;">${av.verdict}</div>
-                <div style="text-align:center; font-size:11px; color:#8a8474; margin-bottom:10px;">${av.buy} BUY · ${av.sell} SELL · ${av.hold} HOLD</div>
+                <div style="text-align:center; font-size:11px; color:#bab2a2; margin-bottom:10px;">${av.buy} BUY · ${av.sell} SELL · ${av.hold} HOLD</div>
                 <div style="display:flex; height:12px; border-radius:7px; overflow:hidden; margin-bottom:12px;"><div style="width:${bp}%; background:#00FF96;"></div><div style="width:${sp}%; background:#FF5B5B;"></div><div style="width:${hp}%; background:#FFB800;"></div></div>
                 <div style="display:flex; gap:6px; margin-bottom:6px;">
                     <div style="flex:1; text-align:center; padding:8px; border-radius:8px; background:rgba(0,255,150,.1); border:1px solid rgba(0,255,150,.3);"><div style="font-size:20px; font-weight:900; color:#00FF96;">${av.buy}</div><div style="font-size:9px; color:#00FF96;">BUY</div></div>
                     <div style="flex:1; text-align:center; padding:8px; border-radius:8px; background:rgba(255,68,68,.1); border:1px solid rgba(255,68,68,.3);"><div style="font-size:20px; font-weight:900; color:#FF5B5B;">${av.sell}</div><div style="font-size:9px; color:#FF5B5B;">SELL</div></div>
                     <div style="flex:1; text-align:center; padding:8px; border-radius:8px; background:rgba(255,184,0,.08); border:1px solid rgba(255,184,0,.28);"><div style="font-size:20px; font-weight:900; color:#FFB800;">${av.hold}</div><div style="font-size:9px; color:#FFB800;">HOLD</div></div>
                 </div>
-                <details><summary style="font-size:11px; color:#8a8474; cursor:pointer; padding:6px 0;">▸ Sabhi ${av.total} agents dekho</summary><div style="margin-top:8px; max-height:300px; overflow-y:auto;">${rows}</div></details>
+                <details><summary style="font-size:11px; color:#bab2a2; cursor:pointer; padding:6px 0;">▸ Sabhi ${av.total} agents dekho</summary><div style="margin-top:8px; max-height:300px; overflow-y:auto;">${rows}</div></details>
             </div>`;
         }
 
@@ -1496,7 +1496,7 @@
                 const ageMs = Date.now() - sinceTs;
                 const isOld = ageMs > 2 * 3600 * 1000;   // 2 ghante+
                 const sinceTime = new Date(sinceTs).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true });
-                ageHTML = `<div style="text-align:center; margin-top:8px; padding:6px 10px; border-radius:8px; font-size:12px; color:${isOld ? '#FF6B6B' : '#9C947F'}; ${isOld ? 'background:rgba(255,68,68,.12); border:1px solid rgba(255,68,68,.4);' : ''}">🕐 ${ageLabel} age: <b>${fmtAge(ageMs)}</b> · ${analysis.signal} since ${sinceTime}${isOld ? '<br>⚠️ Purana signal — move already ho chuka, late entry risk' : ''}</div>`;
+                ageHTML = `<div style="text-align:center; margin-top:8px; padding:6px 10px; border-radius:8px; font-size:12px; color:${isOld ? '#FF6B6B' : '#c2baa8'}; ${isOld ? 'background:rgba(255,68,68,.12); border:1px solid rgba(255,68,68,.4);' : ''}">🕐 ${ageLabel} age: <b>${fmtAge(ageMs)}</b> · ${analysis.signal} since ${sinceTime}${isOld ? '<br>⚠️ Purana signal — move already ho chuka, late entry risk' : ''}</div>`;
             }
 
             // Signal quality score
@@ -1506,13 +1506,13 @@
             const qualityHTML = analysis.signal === 'HOLD' ? '' : `
                 <div style="background:${q.color}15; border:1px solid ${q.color}66; border-radius:10px; padding:12px 14px; margin-bottom:14px;">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                        <span style="font-size:12px; color:#888; letter-spacing:1px;">SIGNAL QUALITY</span>
+                        <span style="font-size:12px; color:#b3b3b3; letter-spacing:1px;">SIGNAL QUALITY</span>
                         <span style="font-size:16px; font-weight:700; color:${q.color};">${q.grade} · ${q.score}/100</span>
                     </div>
                     <div style="height:6px; background:#222; border-radius:3px; overflow:hidden; margin-bottom:8px;">
                         <div style="height:100%; width:${q.score}%; background:${q.color};"></div>
                     </div>
-                    <div style="font-size:10px; color:#999; line-height:1.7;">
+                    <div style="font-size:10px; color:#bdbdbd; line-height:1.7;">
                         ${q.reasons.map(r => `<div>${r}</div>`).join('')}
                     </div>
                     ${q.reversalRisk ? '<div style="text-align:center; margin-top:8px; padding:7px; background:rgba(255,68,68,.15); border:1px solid rgba(255,68,68,.5); border-radius:8px; font-size:11px; color:#FF6B6B; font-weight:700;">⚠️ REVERSAL RISK — Late entry! Pullback ya LIMIT order behtar</div>' :
@@ -1544,12 +1544,12 @@
 
             const now = timestamp ? new Date(timestamp) : new Date();
             const timeStr = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
-            const cacheLabel = fromCache ? ' <span style="color:#888;">(cached)</span>' : '';
+            const cacheLabel = fromCache ? ' <span style="color:#b3b3b3;">(cached)</span>' : '';
 
             // Rebuild the ENTIRE panel HTML fresh every time (panel gets wiped during loading state)
             panel.innerHTML = `
                 <button class="panel-close-btn" onclick="closeAnalysisPanel()">✕</button>
-                <div style="text-align:center; font-size:11px; color:#888; margin-bottom:10px;">
+                <div style="text-align:center; font-size:11px; color:#b3b3b3; margin-bottom:10px;">
                     🕐 Last Updated: ${timeStr}${cacheLabel}
                     <button onclick="analyzePair('${pair}', true)" style="margin-left:10px; padding:3px 10px; font-size:10px; background:rgba(255,184,0,0.15); color:#FFB800; border:1px solid rgba(255,140,0,0.4); border-radius:12px;">🔄 Refresh</button>
                 </div>
@@ -1571,7 +1571,7 @@
 
                 ${agentsHTML}
 
-                <div style="text-align:center; font-size:11px; color:#888; margin-bottom:6px;">MULTI-TIMEFRAME TREND</div>
+                <div style="text-align:center; font-size:11px; color:#b3b3b3; margin-bottom:6px;">MULTI-TIMEFRAME TREND</div>
                 ${confluenceHTML}
 
                 <div id="analysisContent">
@@ -1598,7 +1598,7 @@
                     ${analysis.signal === 'HOLD' ? `
                     <div style="text-align:center; padding:16px; background:rgba(255,184,0,0.08); border:1px solid rgba(255,184,0,0.25); border-radius:10px; margin-top:4px;">
                         <div style="font-size:14px; color:#FFB800; font-weight:600; margin-bottom:4px;">⏳ No Trade Zone</div>
-                        <div style="font-size:11px; color:#888;">Indicators disagree kar rahe hain (Supertrend vs MACD). Clear BUY/SELL signal ka wait karo - tab Entry/SL/TP milega.</div>
+                        <div style="font-size:11px; color:#b3b3b3;">Indicators disagree kar rahe hain (Supertrend vs MACD). Clear BUY/SELL signal ka wait karo - tab Entry/SL/TP milega.</div>
                     </div>
                     ` : `
                     <div style="display:flex; gap:6px; margin:10px 0;">
@@ -1615,7 +1615,7 @@
                         <span class="analysis-value">${analysis.currentPrice}</span>
                     </div>
                     <div class="analysis-row">
-                        <span class="analysis-label">📏 SL Width (× ATR) ✏️<br><span style="font-size:9px; color:#666;">${pair === 'XAUUSD' ? 'Gold setting' : 'Forex setting (sab pairs)'}</span></span>
+                        <span class="analysis-label">📏 SL Width (× ATR) ✏️<br><span style="font-size:9px; color:#979797;">${pair === 'XAUUSD' ? 'Gold setting' : 'Forex setting (sab pairs)'}</span></span>
                         <input type="number" step="0.1" min="0.5" id="editSLMult" value="${getSLMult(pair)}" oninput="changeSLMult()" style="width:110px; padding:6px 8px; background:rgba(255,255,255,0.06); border:1px solid #333; color:#e0e0e0; border-radius:6px; font-size:13px; font-weight:600; text-align:right; font-family:inherit;">
                     </div>
                     <div class="analysis-row">
@@ -1623,7 +1623,7 @@
                         <input type="number" step="0.01" min="0.01" id="editLots" value="${pair === 'ETHUSD' ? '0.10' : '0.01'}" oninput="updateDollarValues()" style="width:110px; padding:6px 8px; background:rgba(255,255,255,0.06); border:1px solid #333; color:#e0e0e0; border-radius:6px; font-size:13px; font-weight:600; text-align:right; font-family:inherit;">
                     </div>
                     <div class="analysis-row">
-                        <span class="analysis-label">📐 Contract Size ✏️<br><span style="font-size:9px; color:#666;">MT5 se auto · ya daalo</span></span>
+                        <span class="analysis-label">📐 Contract Size ✏️<br><span style="font-size:9px; color:#979797;">MT5 se auto · ya daalo</span></span>
                         <input type="number" step="any" min="0" id="editContract" value="${contractDefault(pair)}" oninput="saveContract(); updateDollarValues();" style="width:110px; padding:6px 8px; background:rgba(255,255,255,0.06); border:1px solid #333; color:#e0e0e0; border-radius:6px; font-size:13px; font-weight:600; text-align:right; font-family:inherit;">
                     </div>
                     <div class="analysis-row">
@@ -1638,8 +1638,8 @@
                         <span class="analysis-label">🎯 TP ✏️ <span id="tpDollar" style="color:#00FF96; font-size:11px; font-weight:700;"></span></span>
                         <input type="number" step="any" id="editTP" value="${analysis.tpZone}" oninput="updateDollarValues()" style="width:110px; padding:6px 8px; background:rgba(0,255,150,0.1); border:1px solid rgba(0,255,150,0.4); color:#00FF96; border-radius:6px; font-size:13px; font-weight:600; text-align:right; font-family:inherit;">
                     </div>
-                    <div id="pipInfo" style="font-size:10px; color:#666; text-align:center; margin-top:6px;"></div>
-                    <button onclick="refreshZones()" style="width:100%; margin-top:8px; padding:8px; font-size:11px; background:#141414; color:#888; border:1px solid #2a2a2a; border-radius:6px; font-family:inherit;">↻ RESET TO CALCULATED VALUES</button>
+                    <div id="pipInfo" style="font-size:10px; color:#979797; text-align:center; margin-top:6px;"></div>
+                    <button onclick="refreshZones()" style="width:100%; margin-top:8px; padding:8px; font-size:11px; background:#141414; color:#b3b3b3; border:1px solid #2a2a2a; border-radius:6px; font-family:inherit;">↻ RESET TO CALCULATED VALUES</button>
                     `}
                 </div>
 
@@ -1716,7 +1716,7 @@
             const bl = document.getElementById('btnLimit');
             if (!bm || !bl) return;
             const on = 'background:rgba(255,184,0,0.2); color:#FFB800; border:1px solid #FFB800;';
-            const off = 'background:#141414; color:#777; border:1px solid #2a2a2a;';
+            const off = 'background:#141414; color:#a6a6a6; border:1px solid #2a2a2a;';
             bm.style.cssText = 'flex:1; padding:9px; font-size:11px; font-weight:700; border-radius:6px; font-family:inherit;' + (mode === 'MARKET' ? on : off);
             bl.style.cssText = 'flex:1; padding:9px; font-size:11px; font-weight:700; border-radius:6px; font-family:inherit;' + (mode === 'LIMIT' ? on : off);
         }
@@ -1957,7 +1957,7 @@
             if (!list) return;
 
             if (trades.length === 0) {
-                list.innerHTML = '<div style="text-align:center; padding:16px; color:#666; font-size:12px;">Abhi koi trade record nahi hai. Analysis me "✅ Maine Ye Trade Liya" dabao.</div>';
+                list.innerHTML = '<div style="text-align:center; padding:16px; color:#979797; font-size:12px;">Abhi koi trade record nahi hai. Analysis me "✅ Maine Ye Trade Liya" dabao.</div>';
                 statsDiv.style.display = 'none';
                 return;
             }
@@ -1987,19 +1987,19 @@
             statsDiv.innerHTML = `
                 <div style="flex:1; text-align:center; padding:10px; background:#141414; border:1px solid rgba(0,255,150,0.3); border-radius:8px;">
                     <div style="font-size:16px; font-weight:700; color:#00FF96;">${wins}</div>
-                    <div style="font-size:9px; color:#888;">TP HIT</div>
+                    <div style="font-size:9px; color:#b3b3b3;">TP HIT</div>
                 </div>
                 <div style="flex:1; text-align:center; padding:10px; background:#141414; border:1px solid rgba(255,68,68,0.3); border-radius:8px;">
                     <div style="font-size:16px; font-weight:700; color:#FF4444;">${losses}</div>
-                    <div style="font-size:9px; color:#888;">SL HIT</div>
+                    <div style="font-size:9px; color:#b3b3b3;">SL HIT</div>
                 </div>
                 <div style="flex:1; text-align:center; padding:10px; background:#141414; border:1px solid rgba(255,184,0,0.3); border-radius:8px;">
                     <div style="font-size:16px; font-weight:700; color:#FFB800;">${openCount}</div>
-                    <div style="font-size:9px; color:#888;">OPEN</div>
+                    <div style="font-size:9px; color:#b3b3b3;">OPEN</div>
                 </div>
                 <div style="flex:1; text-align:center; padding:10px; background:#141414; border:1px solid #2a2a2a; border-radius:8px;">
                     <div style="font-size:16px; font-weight:700; color:#e0e0e0;">${winRate}%</div>
-                    <div style="font-size:9px; color:#888;">WIN RATE</div>
+                    <div style="font-size:9px; color:#b3b3b3;">WIN RATE</div>
                 </div>
             `;
 
@@ -2008,7 +2008,7 @@
             let html = `<div style="font-size:12px; font-weight:700; color:#00FF96; margin:6px 0 8px; letter-spacing:1px;">▸ ${currentMonthName} (This Month)</div>`;
 
             if (currentMonthTrades.length === 0) {
-                html += '<div style="text-align:center; padding:12px; color:#666; font-size:11px;">Is month abhi koi trade nahi.</div>';
+                html += '<div style="text-align:center; padding:12px; color:#979797; font-size:11px;">Is month abhi koi trade nahi.</div>';
             } else {
                 html += currentMonthTrades.map(t => {
                     const d = new Date(t.openTime);
@@ -2036,7 +2036,7 @@
                     return `
                     <div style="background:#141414; border:1px solid #2a2a2a; border-radius:8px; padding:12px; margin-bottom:8px;">
                         <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
-                            <span style="font-weight:700; color:#FFB800;">${t.pair} <span style="color:${sigColor}; font-size:11px;">${t.signal}</span> <span style="color:#888; font-size:10px;">${t.lots ? t.lots + ' lot' : ''}${t.entryMode ? ' · ' + (t.entryMode === 'MARKET' ? '⚡' : '⏳') : ''}${t.quality ? ' · ' + (t.quality === 'STRONG' ? '🟢' : t.quality === 'MODERATE' ? '🟡' : '🔴') : ''}</span></span>
+                            <span style="font-weight:700; color:#FFB800;">${t.pair} <span style="color:${sigColor}; font-size:11px;">${t.signal}</span> <span style="color:#b3b3b3; font-size:10px;">${t.lots ? t.lots + ' lot' : ''}${t.entryMode ? ' · ' + (t.entryMode === 'MARKET' ? '⚡' : '⏳') : ''}${t.quality ? ' · ' + (t.quality === 'STRONG' ? '🟢' : t.quality === 'MODERATE' ? '🟡' : '🔴') : ''}</span></span>
                             ${statusBadge}
                         </div>
                         <div style="display:flex; justify-content:space-between; font-size:11px; color:#aaa;">
@@ -2045,7 +2045,7 @@
                             <span>TP: ${t.tp}</span>
                         </div>
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px;">
-                            <span style="font-size:10px; color:#666;">${dateStr}</span>
+                            <span style="font-size:10px; color:#979797;">${dateStr}</span>
                             <span style="display:flex; gap:8px; align-items:center;">
                                 ${plBadge}
                                 ${isRunning ? `<button onclick="closeTrade(${t.id})" style="padding:2px 8px; font-size:9px; background:rgba(0,255,150,0.15); color:#00FF96; border:1px solid rgba(0,255,150,0.4); border-radius:6px;">✔️ Close</button>` : ''}
@@ -2065,7 +2065,7 @@
                     monthGroups[key].trades.push(t);
                 });
 
-                html += `<div style="font-size:12px; font-weight:700; color:#888; margin:16px 0 8px; letter-spacing:1px;">▸ PREVIOUS MONTHS</div>`;
+                html += `<div style="font-size:12px; font-weight:700; color:#b3b3b3; margin:16px 0 8px; letter-spacing:1px;">▸ PREVIOUS MONTHS</div>`;
 
                 // Sort newest month first
                 Object.keys(monthGroups).sort().reverse().forEach(key => {
@@ -2155,14 +2155,14 @@
                 { v: 'D', l: '1D' }
             ];
             const tfButtons = tfs.map(t => `
-                <button onclick="setChartTF('${t.v}')" style="flex:1; padding:8px 4px; font-size:12px; font-weight:700; background:${chartInterval === t.v ? 'rgba(255,184,0,0.2)' : '#141414'}; color:${chartInterval === t.v ? '#FFB800' : '#777'}; border:1px solid ${chartInterval === t.v ? '#FFB800' : '#2a2a2a'}; border-radius:6px; font-family:inherit;">${t.l}</button>
+                <button onclick="setChartTF('${t.v}')" style="flex:1; padding:8px 4px; font-size:12px; font-weight:700; background:${chartInterval === t.v ? 'rgba(255,184,0,0.2)' : '#141414'}; color:${chartInterval === t.v ? '#FFB800' : '#a6a6a6'}; border:1px solid ${chartInterval === t.v ? '#FFB800' : '#2a2a2a'}; border-radius:6px; font-family:inherit;">${t.l}</button>
             `).join('');
 
             // Support/Resistance = TradingView built-in Pivot Points study (chart pe lines dikhengi)
             const studies = showSR ? '&studies=' + encodeURIComponent('PivotPointsStandard@tv-basicstudies') : '';
             const src = `https://s.tradingview.com/widgetembed/?symbol=${encodeURIComponent(tvSymbol(chartPair))}&interval=${chartInterval}&theme=dark&style=1&locale=en&hide_side_toolbar=1&allow_symbol_change=0&save_image=0${studies}`;
 
-            const toggleStyle = (on, color) => `flex:1; padding:8px 4px; font-size:11px; font-weight:700; background:${on ? 'rgba(255,184,0,0.2)' : '#141414'}; color:${on ? color : '#777'}; border:1px solid ${on ? color : '#2a2a2a'}; border-radius:6px; font-family:inherit;`;
+            const toggleStyle = (on, color) => `flex:1; padding:8px 4px; font-size:11px; font-weight:700; background:${on ? 'rgba(255,184,0,0.2)' : '#141414'}; color:${on ? color : '#a6a6a6'}; border:1px solid ${on ? color : '#2a2a2a'}; border-radius:6px; font-family:inherit;`;
 
             win.style.display = 'flex';
             win.innerHTML = `
@@ -2206,7 +2206,7 @@
 
             const apiKey = localStorage.getItem('td_api_key');
             if (!apiKey) {
-                panel.innerHTML = '<div style="padding:10px; color:#888; font-size:11px;">API key chahiye - ⚙️ Settings me daalo</div>';
+                panel.innerHTML = '<div style="padding:10px; color:#b3b3b3; font-size:11px;">API key chahiye - ⚙️ Settings me daalo</div>';
                 return;
             }
 
@@ -2256,12 +2256,12 @@
             const rows = d.levels.map(l => {
                 const isKey = l.key === 0.5 || l.key === 0.618;
                 return `<span style="flex:1; text-align:center; padding:5px 2px; background:${isKey ? 'rgba(255,158,224,0.15)' : '#141414'}; border:1px solid ${isKey ? '#FF9EE0' : '#2a2a2a'}; border-radius:5px;">
-                    <span style="display:block; font-size:9px; color:#888;">${l.label}</span>
+                    <span style="display:block; font-size:9px; color:#b3b3b3;">${l.label}</span>
                     <span style="display:block; font-size:11px; color:${isKey ? '#FF9EE0' : '#ccc'}; font-weight:700;">${l.price}</span>
                 </span>`;
             }).join('');
             panel.innerHTML = `
-                <div style="font-size:9px; color:#666; margin-bottom:4px; text-align:center;">FIB RETRACEMENT · Swing H: ${d.high} · L: ${d.low} (last 100 candles)</div>
+                <div style="font-size:9px; color:#979797; margin-bottom:4px; text-align:center;">FIB RETRACEMENT · Swing H: ${d.high} · L: ${d.low} (last 100 candles)</div>
                 <div style="display:flex; gap:3px; margin-bottom:8px;">${rows}</div>
             `;
         }
@@ -2303,7 +2303,7 @@
             const statBox = (val, label, color = A) => `
                 <div style="${box} flex:1; text-align:center; padding:16px 4px;">
                     <div style="font-size:24px; font-weight:700; color:${color};">${val}</div>
-                    <div style="font-size:10px; color:#777; letter-spacing:2px; margin-top:4px;">${label}</div>
+                    <div style="font-size:10px; color:#a6a6a6; letter-spacing:2px; margin-top:4px;">${label}</div>
                 </div>`;
 
             // Entry mode comparison (MARKET vs LIMIT)
@@ -2382,7 +2382,7 @@
                     <td style="padding:10px 4px; text-align:center; color:#FF4444;">${s.sl}</td>
                     <td style="padding:10px 4px; text-align:center; color:${A};">${pAcc}</td>
                 </tr>`;
-            }).join('') || `<tr><td colspan="5" style="padding:14px; color:#666;">Abhi koi trade nahi</td></tr>`;
+            }).join('') || `<tr><td colspan="5" style="padding:14px; color:#979797;">Abhi koi trade nahi</td></tr>`;
 
             // Monthly stats
             const monthMap = {};
@@ -2412,16 +2412,16 @@
                     <td style="padding:10px 4px; text-align:center; color:${A};">${mAcc}</td>
                     <td style="padding:10px 4px; text-align:center; color:${mPLColor}; font-weight:700;">${mClosed ? fmtPL(m.pl) : '—'}</td>
                 </tr>`;
-            }).join('') || `<tr><td colspan="6" style="padding:14px; color:#666;">Abhi koi closed trade nahi</td></tr>`;
+            }).join('') || `<tr><td colspan="6" style="padding:14px; color:#979797;">Abhi koi closed trade nahi</td></tr>`;
 
-            const th = `padding:8px 4px; font-size:10px; color:#777; letter-spacing:2px; text-align:center; border-bottom:1px solid #333;`;
+            const th = `padding:8px 4px; font-size:10px; color:#a6a6a6; letter-spacing:2px; text-align:center; border-bottom:1px solid #333;`;
 
             return `
                 <button onclick="closeStatsWindow()" style="position:fixed; top:12px; right:12px; z-index:1101; width:36px; height:36px; border-radius:50%; background:#1a1a1a; border:1px solid ${A}; color:${A}; font-size:16px;">✕</button>
 
                 <div style="${box} padding:16px; margin-bottom:14px;">
                     <div style="font-size:20px; font-weight:700; color:${A}; letter-spacing:3px; margin-bottom:6px;">PERFORMANCE</div>
-                    <div style="font-size:11px; color:#777; margin-bottom:14px;">Accuracy = TP / (TP+SL). Trade record karke "Check Results" se auto-update hota hai.</div>
+                    <div style="font-size:11px; color:#a6a6a6; margin-bottom:14px;">Accuracy = TP / (TP+SL). Trade record karke "Check Results" se auto-update hota hai.</div>
                     <div style="display:flex; gap:8px; margin-bottom:8px;">
                         ${statBox(closed.length, 'CLOSED')}
                         ${statBox(acc + '%', 'ACCURACY')}
@@ -2439,7 +2439,7 @@
 
                 <div style="${box} padding:16px; margin-bottom:14px;">
                     <div style="font-size:20px; font-weight:700; color:${A}; letter-spacing:3px; margin-bottom:6px;">ENTRY MODE</div>
-                    <div style="font-size:10px; color:#777; margin-bottom:10px;">Kaunsa entry method behtar chal raha hai - 30+ trades baad hi bharosa karo</div>
+                    <div style="font-size:10px; color:#a6a6a6; margin-bottom:10px;">Kaunsa entry method behtar chal raha hai - 30+ trades baad hi bharosa karo</div>
                     <table style="width:100%; border-collapse:collapse; font-size:13px;">
                         <tr>
                             <th style="${th} text-align:left;">MODE</th>
@@ -2455,7 +2455,7 @@
 
                 <div style="${box} padding:16px; margin-bottom:14px;">
                     <div style="font-size:20px; font-weight:700; color:${A}; letter-spacing:3px; margin-bottom:6px;">SIGNAL QUALITY</div>
-                    <div style="font-size:10px; color:#777; margin-bottom:10px;">STRONG signals ka win rate zyada hona chahiye - yehi filter ki value hai</div>
+                    <div style="font-size:10px; color:#a6a6a6; margin-bottom:10px;">STRONG signals ka win rate zyada hona chahiye - yehi filter ki value hai</div>
                     <table style="width:100%; border-collapse:collapse; font-size:13px;">
                         <tr>
                             <th style="${th} text-align:left;">GRADE</th>
@@ -2500,7 +2500,7 @@
 
                 <div style="${box} padding:16px; margin-bottom:20px;">
                     <div style="font-size:20px; font-weight:700; color:${A}; letter-spacing:3px; margin-bottom:10px;">BACKUP</div>
-                    <div style="font-size:11px; color:#777; margin-bottom:12px;">Trade history JSON file me export karo. Phone change ya cache clear se pehle backup zaroor lo.</div>
+                    <div style="font-size:11px; color:#a6a6a6; margin-bottom:12px;">Trade history JSON file me export karo. Phone change ya cache clear se pehle backup zaroor lo.</div>
                     <div style="display:flex; gap:10px;">
                         <button onclick="exportTrades()" style="flex:1; padding:12px; background:#1a1a1a; color:#00FF96; border:1px solid rgba(0,255,150,0.4); border-radius:8px; font-family:inherit; font-weight:700;">⬇ EXPORT</button>
                         <button onclick="document.getElementById('importFile').click()" style="flex:1; padding:12px; background:#1a1a1a; color:${A}; border:1px solid rgba(255,184,0,0.4); border-radius:8px; font-family:inherit; font-weight:700;">⬆ IMPORT</button>
