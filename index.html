@@ -494,6 +494,11 @@
             <button onclick="openSettings()" style="margin-top:10px; background: rgba(255,255,255,0.1); color:#FFB800; border:1px solid rgba(255,140,0,0.3);">
                 ⚙️ API Settings
             </button>
+            <button onclick="openTools()" style="margin-top:10px; margin-left:6px; background: rgba(255,255,255,0.1); color:#FFB800; border:1px solid rgba(255,140,0,0.3);">
+                🛠️ Tools
+            </button>
+            <div id="budgetBar" style="margin-top:12px;"></div>
+            <input type="file" id="restoreFile" accept="application/json" style="display:none" onchange="restoreAll(event)">
         </header>
 
         <div id="newsWarning"></div>
@@ -627,6 +632,7 @@
             showTip();                             // Trading Gyaan
             loadSymbolSpecs();                     // MT5 symbol specs (auto SL/TP $)
             setInterval(loadSymbolSpecs, 60000);
+            updateBudgetBar();                     // API budget bar
         });
 
         // ===== Trading Gyaan: rotating educational tips =====
@@ -921,13 +927,123 @@
 
         async function tdFetch(endpoint, symbol, apiKey, interval, extra = '') {
             await waitForRateSlot();
+            apiBudgetInc();   // API call count (budget tracker)
             const url = `https://api.twelvedata.com/${endpoint}?symbol=${encodeURIComponent(symbol)}&interval=${interval}&apikey=${apiKey}${extra}`;
             const res = await fetch(url);
             const data = await res.json();
             if (data.status === 'error' || data.code) {
+                const msg = (data.message || '').toLowerCase();
+                if (data.code === 404 || data.code === 400 || /not found|not available|invalid symbol|symbol.*not/.test(msg)) {
+                    markBadSymbol(symbol);   // galat/unavailable symbol lock
+                }
                 throw new Error(data.message || 'API error - check your key or rate limit');
             }
             return data;
+        }
+
+        // ========== BATCH 1 FEATURES ==========
+        // ----- API Budget Tracker -----
+        function apiBudgetKey(){ return 'td_calls_' + new Date().toISOString().slice(0,10); }
+        function apiBudgetGet(){ return parseInt(localStorage.getItem(apiBudgetKey())) || 0; }
+        function apiBudgetCap(){ return parseInt(localStorage.getItem('td_cap')) || 800; }
+        function apiBudgetInc(){ localStorage.setItem(apiBudgetKey(), apiBudgetGet() + 1); updateBudgetBar(); }
+        function updateBudgetBar(){
+            const el = document.getElementById('budgetBar'); if(!el) return;
+            const used = apiBudgetGet(), cap = apiBudgetCap(), pct = Math.min(100, Math.round(used/cap*100));
+            const col = pct>=90?'#FF5B5B':pct>=70?'#FFB800':'#00FF96';
+            el.innerHTML = `<div style="font-size:10px; color:#a6a6a6; margin-bottom:3px;">📊 API today: ${used} / ${cap} (${pct}%)${pct>=100?' · ⚠️ LIMIT':''}</div><div style="height:6px; background:#222; border-radius:4px; overflow:hidden;"><div style="width:${pct}%; height:100%; background:${col};"></div></div>`;
+        }
+        // ----- Bad Symbol Cache -----
+        function getBadSyms(){ try{ return JSON.parse(localStorage.getItem('bad_syms')) || {}; }catch(e){ return {}; } }
+        function markBadSymbol(sym){ const b=getBadSyms(); b[sym]=Date.now(); localStorage.setItem('bad_syms', JSON.stringify(b)); }
+        function isBadSymbol(sym){ return !!getBadSyms()[sym]; }
+        function unlockSymbols(){ localStorage.removeItem('bad_syms'); miniToast('🔓 Sabhi locked symbols clear ho gaye', true); }
+        // ----- Manual Trade Add -----
+        function manualTradeAdd(){
+            const pair = (prompt('Pair (jaise EURUSD):')||'').toUpperCase().trim();
+            if(!pair) return;
+            const dir = (prompt('Direction — BUY ya SELL:')||'').toUpperCase().trim();
+            if(dir!=='BUY' && dir!=='SELL') return alert('BUY ya SELL likho');
+            const entry = parseFloat(prompt('Entry price:'));
+            const sl = parseFloat(prompt('SL price:'));
+            const tp = parseFloat(prompt('TP price:'));
+            const lots = parseFloat(prompt('Lot size:', '0.01')) || 0.01;
+            if(isNaN(entry)||isNaN(sl)||isNaN(tp)) return alert('Sahi prices daalo');
+            const trades = getTrades();
+            trades.unshift({ id:Date.now(), pair, signal:dir, orderType:dir+' MARKET', entryMode:'MARKET',
+                quality:null, qualityScore:null, lots, entry, sl, tp,
+                openTime:new Date().toISOString(), status:'OPEN', filled:true, fillTime:new Date().toISOString(),
+                result:null, closeTime:null, manual:true });
+            trades.splice(200); saveTrades(trades); renderTrades();
+            miniToast('✅ Manual trade add: '+pair+' '+dir, true);
+        }
+        // ----- Full Backup / Restore -----
+        function exportAll(){
+            const data = {};
+            for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i); data[k]=localStorage.getItem(k); }
+            const blob = new Blob([JSON.stringify({ _app:'ForexDiagnosis', _date:new Date().toISOString(), data }, null, 2)], { type:'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a'); a.href=url;
+            a.download = `ForexDiagnosis-FullBackup-${new Date().toISOString().slice(0,10)}.json`;
+            a.click(); URL.revokeObjectURL(url);
+            miniToast('💾 Full backup download ho gaya', true);
+        }
+        function restoreAll(event){
+            const file = event.target.files[0]; if(!file) return;
+            const r = new FileReader();
+            r.onload = e => {
+                try {
+                    const parsed = JSON.parse(e.target.result);
+                    const data = parsed.data || parsed;
+                    if(typeof data!=='object' || Array.isArray(data)) throw new Error('bad');
+                    if(!confirm('Restore karoge? Current settings + trades REPLACE ho jayenge.')) return;
+                    Object.keys(data).forEach(k => localStorage.setItem(k, data[k]));
+                    miniToast('✅ Restore ho gaya — reload...', true);
+                    setTimeout(()=>location.reload(), 1200);
+                } catch(err){ alert('❌ Galat backup file'); }
+            };
+            r.readAsText(file);
+            event.target.value = '';
+        }
+        // ----- Bridge Test + Last Order -----
+        async function bridgeTest(){
+            const fb = localStorage.getItem('fb_url');
+            if(!fb) return alert('Firebase URL set nahi hai (⚙️ API Settings)');
+            miniToast('🔌 Bridge test kar raha...', true);
+            try {
+                const res = await fetch(fb + '/fxbridge/specs.json');
+                if(res.ok){ const d = await res.json(); const n = d && typeof d==='object' ? Object.keys(d).length : 0; alert('✅ Bridge CONNECTED!\nFirebase OK · specs: '+n+' symbols'); }
+                else alert('⚠️ Bridge response: HTTP '+res.status);
+            } catch(e){ alert('❌ Bridge fail: '+e.message); }
+        }
+        function lastOrderView(){
+            const lo = window._lastOrderPayload;
+            if(!lo) return alert('Abhi tak koi order nahi bheja.');
+            alert('📦 LAST ORDER (MT5 pe bheja):\n\n'+JSON.stringify(lo, null, 2));
+        }
+        // ----- Refresh All + background sync -----
+        async function refreshAll(){
+            miniToast('🔄 Refresh...', true);
+            try{ syncMT5Results(); }catch(e){}
+            try{ syncPaperTrades(); }catch(e){}
+            try{ renderTrades(); }catch(e){}
+            updateBudgetBar();
+            miniToast('✅ Refresh done', true);
+        }
+        document.addEventListener('visibilitychange', () => {
+            if(!document.hidden){ try{ syncMT5Results(); syncPaperTrades(); }catch(e){} }
+        });
+        // ----- Tools menu -----
+        function openTools(){
+            const c = (prompt('🛠️ TOOLS — number daalo:\n\n1 = Refresh All\n2 = Manual Trade Add\n3 = Full Backup (download)\n4 = Restore (upload file)\n5 = Bridge Test\n6 = Last Order dekho\n7 = Unlock Symbols\n8 = API Cap set')||'').trim();
+            if(c==='1') refreshAll();
+            else if(c==='2') manualTradeAdd();
+            else if(c==='3') exportAll();
+            else if(c==='4') document.getElementById('restoreFile').click();
+            else if(c==='5') bridgeTest();
+            else if(c==='6') lastOrderView();
+            else if(c==='7') unlockSymbols();
+            else if(c==='8'){ const v=prompt('Daily API cap:', apiBudgetCap()); if(v){ localStorage.setItem('td_cap', parseInt(v)||800); updateBudgetBar(); miniToast('Cap set: '+(parseInt(v)||800), true); } }
         }
 
         async function fetchLiveAnalysis(pair, apiKey, interval, livePrice) {
@@ -1213,7 +1329,7 @@
                 sl: sl,
                 tp: tp
             };
-
+            window._lastOrderPayload = order;   // Last Order View ke liye
             // ===== AUTO RE-CHECK: bhejne se pehle LIVE price verify (stale/late-entry guard) =====
             try {
                 const rcKey = localStorage.getItem('td_api_key');
@@ -2137,6 +2253,15 @@
             chartPair = pair;
             renderChart();
         }
+        function toggleChartFullscreen(){
+            const win = document.getElementById('chartWindow');
+            if(!win) return;
+            if(!document.fullscreenElement){
+                (win.requestFullscreen || win.webkitRequestFullscreen || function(){}).call(win);
+            } else {
+                (document.exitFullscreen || document.webkitExitFullscreen || function(){}).call(document);
+            }
+        }
 
         function setChartTF(tf, btn) {
             chartInterval = tf;
@@ -2168,7 +2293,10 @@
             win.innerHTML = `
                 <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 12px; background:#0d0d0d; border-bottom:1px solid #2a2a2a;">
                     <span style="font-weight:700; color:#FFB800; font-size:15px; letter-spacing:1px;">${chartPair} LIVE</span>
-                    <button onclick="closeChart()" style="width:32px; height:32px; border-radius:50%; background:#1a1a1a; border:1px solid #FFB800; color:#FFB800; font-size:15px;">✕</button>
+                    <div style="display:flex; gap:8px;">
+                        <button onclick="toggleChartFullscreen()" style="width:32px; height:32px; border-radius:50%; background:#1a1a1a; border:1px solid #FFB800; color:#FFB800; font-size:14px;">⛶</button>
+                        <button onclick="closeChart()" style="width:32px; height:32px; border-radius:50%; background:#1a1a1a; border:1px solid #FFB800; color:#FFB800; font-size:15px;">✕</button>
+                    </div>
                 </div>
                 <div style="display:flex; gap:5px; padding:8px 10px 4px; background:#0d0d0d;">
                     ${tfButtons}
