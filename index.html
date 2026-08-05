@@ -682,6 +682,16 @@
             t.textContent = msg; t.style.opacity='1';
             clearTimeout(window._toastT); window._toastT = setTimeout(()=>{ t.style.opacity='0'; }, 2800);
         }
+        // alert -> toast (chhote messages toast me; bade/multi-block native alert me rehte)
+        (function(){
+            const _na = window.alert.bind(window);
+            window.alert = function(m){
+                m = String(m);
+                if(m.length > 110 || m.indexOf('\n\n') !== -1){ _na(m); return; }
+                const ok = !/(❌|⚠️|🚫|error|fail|galat|nahi|problem|invalid|ruko)/i.test(m);
+                miniToast(m.replace(/\n/g,' '), ok);
+            };
+        })();
         async function sendCommand(patch){
             const fbUrl = localStorage.getItem('fb_url');
             if(!fbUrl){ miniToast('Firebase URL set nahi hai — API Settings me daalo', false); return false; }
@@ -1571,13 +1581,32 @@
             }
             return { agents: A, buy, sell, hold, total: n, verdict, vcolor };
         }
+        function agentCategory(name) {
+            const n = name.toLowerCase();
+            if (/rsi|macd|momentum|range-position|breakout/.test(n)) return 'Momentum';
+            if (/reversal|mean-reversion|overextension|pullback|fade|bollinger/.test(n)) return 'Reversal';
+            if (/volatility|vol-|participation/.test(n)) return 'Volatility';
+            if (/risk|confidence|conviction|session|freshness|final/.test(n)) return 'Risk';
+            return 'Trend';
+        }
+        function filterAgents(cat, btn) {
+            document.querySelectorAll('.agentRow').forEach(r => {
+                r.style.display = (cat === 'All' || r.dataset.cat === cat) ? 'flex' : 'none';
+            });
+            if (btn && btn.parentElement) {
+                btn.parentElement.querySelectorAll('button').forEach(b => b.style.opacity = '0.45');
+                btn.style.opacity = '1';
+            }
+        }
         function buildAgentsHTML(av) {
             const bp = Math.round(av.buy / av.total * 100), sp = Math.round(av.sell / av.total * 100), hp = 100 - bp - sp;
             const rows = av.agents.map(a => {
                 const col = a.vote === 'BUY' ? '#00FF96' : a.vote === 'SELL' ? '#FF5B5B' : '#FFB800';
                 const bg = a.vote === 'BUY' ? 'rgba(0,255,150,.12)' : a.vote === 'SELL' ? 'rgba(255,68,68,.12)' : 'rgba(255,184,0,.12)';
-                return `<div style="display:flex; justify-content:space-between; align-items:center; padding:6px 9px; border-radius:7px; background:#17161a; margin-bottom:4px;"><div><div style="font-size:11px; font-weight:700; color:#e8e2d5;">${a.name}</div><div style="font-size:8.5px; color:#bab2a2;">${a.reason}</div></div><span style="font-size:9px; font-weight:800; padding:2px 9px; border-radius:12px; background:${bg}; color:${col};">${a.vote}</span></div>`;
+                return `<div class="agentRow" data-cat="${agentCategory(a.name)}" style="display:flex; justify-content:space-between; align-items:center; padding:6px 9px; border-radius:7px; background:#17161a; margin-bottom:4px;"><div><div style="font-size:11px; font-weight:700; color:#e8e2d5;">${a.name}</div><div style="font-size:8.5px; color:#bab2a2;">${a.reason}</div></div><span style="font-size:9px; font-weight:800; padding:2px 9px; border-radius:12px; background:${bg}; color:${col};">${a.vote}</span></div>`;
             }).join('');
+            const cats = ['All', 'Trend', 'Momentum', 'Reversal', 'Volatility', 'Risk'];
+            const filterBtns = cats.map((c, i) => `<button onclick="filterAgents('${c}',this)" style="flex:0 0 auto; padding:5px 11px; font-size:10px; font-weight:700; border-radius:14px; background:#1c1b20; color:#D9B65E; border:1px solid rgba(217,182,94,.3); opacity:${i === 0 ? '1' : '0.45'};">${c}</button>`).join('');
             return `<div style="background:#111013; border:1px solid rgba(217,182,94,.32); border-radius:12px; padding:14px; margin-bottom:14px;">
                 <div style="text-align:center; font-size:13px; font-weight:800; color:#D9B65E; letter-spacing:1px;">🤖 ${av.total} AI AGENTS · VOTE</div>
                 <div style="text-align:center; font-size:22px; font-weight:900; color:${av.vcolor}; margin:6px 0 2px;">${av.verdict}</div>
@@ -1588,7 +1617,10 @@
                     <div style="flex:1; text-align:center; padding:8px; border-radius:8px; background:rgba(255,68,68,.1); border:1px solid rgba(255,68,68,.3);"><div style="font-size:20px; font-weight:900; color:#FF5B5B;">${av.sell}</div><div style="font-size:9px; color:#FF5B5B;">SELL</div></div>
                     <div style="flex:1; text-align:center; padding:8px; border-radius:8px; background:rgba(255,184,0,.08); border:1px solid rgba(255,184,0,.28);"><div style="font-size:20px; font-weight:900; color:#FFB800;">${av.hold}</div><div style="font-size:9px; color:#FFB800;">HOLD</div></div>
                 </div>
-                <details><summary style="font-size:11px; color:#bab2a2; cursor:pointer; padding:6px 0;">▸ Sabhi ${av.total} agents dekho</summary><div style="margin-top:8px; max-height:300px; overflow-y:auto;">${rows}</div></details>
+                <details><summary style="font-size:11px; color:#bab2a2; cursor:pointer; padding:6px 0;">▸ Sabhi ${av.total} agents dekho</summary>
+                    <div style="display:flex; gap:6px; overflow-x:auto; padding:8px 0 10px;">${filterBtns}</div>
+                    <div style="margin-top:2px; max-height:300px; overflow-y:auto;">${rows}</div>
+                </details>
             </div>`;
         }
 
