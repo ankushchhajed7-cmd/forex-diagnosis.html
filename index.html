@@ -106,7 +106,7 @@
         }
 
         .confluence-cell .tf-label {
-            color: #ccc;
+            color: #FFC24D;
             font-weight: 700;
             letter-spacing: 1px;
         }
@@ -367,8 +367,9 @@
         }
 
         .analysis-label {
-            color: #d6d6d6;
-            font-weight: 600;
+            color: #FFC24D;
+            font-weight: 700;
+            text-shadow: 0 0 6px rgba(255,184,0,0.22);
         }
 
         .analysis-value {
@@ -1618,7 +1619,7 @@
                     <div style="flex:1; text-align:center; padding:8px; border-radius:8px; background:rgba(255,68,68,.1); border:1px solid rgba(255,68,68,.3);"><div style="font-size:20px; font-weight:900; color:#FF5B5B;">${av.sell}</div><div style="font-size:9px; color:#FF5B5B;">SELL</div></div>
                     <div style="flex:1; text-align:center; padding:8px; border-radius:8px; background:rgba(255,184,0,.08); border:1px solid rgba(255,184,0,.28);"><div style="font-size:20px; font-weight:900; color:#FFB800;">${av.hold}</div><div style="font-size:9px; color:#FFB800;">HOLD</div></div>
                 </div>
-                <details><summary style="font-size:11px; color:#d6d6d6; font-weight:700; cursor:pointer; padding:6px 0;">▸ Sabhi ${av.total} agents dekho</summary>
+                <details><summary style="font-size:11px; color:#D9B65E; font-weight:700; cursor:pointer; padding:6px 0;">▸ Sabhi ${av.total} agents dekho</summary>
                     <div style="display:flex; gap:6px; overflow-x:auto; padding:8px 0 10px;">${filterBtns}</div>
                     <div style="margin-top:2px; max-height:300px; overflow-y:auto;">${rows}</div>
                 </details>
@@ -1655,13 +1656,13 @@
             const qualityHTML = analysis.signal === 'HOLD' ? '' : `
                 <div style="background:${q.color}15; border:1px solid ${q.color}66; border-radius:10px; padding:12px 14px; margin-bottom:14px;">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                        <span style="font-size:12px; color:#b3b3b3; letter-spacing:1px;">SIGNAL QUALITY</span>
+                        <span style="font-size:12px; color:#FFC24D; font-weight:700; letter-spacing:1px;">SIGNAL QUALITY</span>
                         <span style="font-size:16px; font-weight:700; color:${q.color};">${q.grade} · ${q.score}/100</span>
                     </div>
                     <div style="height:6px; background:#222; border-radius:3px; overflow:hidden; margin-bottom:8px;">
                         <div style="height:100%; width:${q.score}%; background:${q.color};"></div>
                     </div>
-                    <div style="font-size:10px; color:#bdbdbd; line-height:1.7;">
+                    <div style="font-size:10px; color:#d6d6d6; line-height:1.7;">
                         ${q.reasons.map(r => `<div>${r}</div>`).join('')}
                     </div>
                     ${q.reversalRisk ? '<div style="text-align:center; margin-top:8px; padding:7px; background:rgba(255,68,68,.15); border:1px solid rgba(255,68,68,.5); border-radius:8px; font-size:11px; color:#FF6B6B; font-weight:700;">⚠️ REVERSAL RISK — Late entry! Pullback ya LIMIT order behtar</div>' :
@@ -1720,7 +1721,7 @@
 
                 ${agentsHTML}
 
-                <div style="text-align:center; font-size:11px; color:#b3b3b3; margin-bottom:6px;">MULTI-TIMEFRAME TREND</div>
+                <div style="text-align:center; font-size:11px; color:#FFC24D; font-weight:700; letter-spacing:1px; margin-bottom:6px;">MULTI-TIMEFRAME TREND</div>
                 ${confluenceHTML}
 
                 <div id="analysisContent">
@@ -2214,7 +2215,7 @@
                     monthGroups[key].trades.push(t);
                 });
 
-                html += `<div style="font-size:12px; font-weight:700; color:#b3b3b3; margin:16px 0 8px; letter-spacing:1px;">▸ PREVIOUS MONTHS</div>`;
+                html += `<div style="font-size:12px; font-weight:700; color:#FFC24D; margin:16px 0 8px; letter-spacing:1px;">▸ PREVIOUS MONTHS</div>`;
 
                 // Sort newest month first
                 Object.keys(monthGroups).sort().reverse().forEach(key => {
