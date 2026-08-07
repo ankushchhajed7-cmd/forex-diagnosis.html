@@ -1047,7 +1047,7 @@
         });
         // ----- Tools menu -----
         function openTools(){
-            const c = (prompt('🛠️ TOOLS — number daalo:\n\n1 = Refresh All\n2 = Manual Trade Add\n3 = Full Backup (download)\n4 = Restore (upload file)\n5 = Bridge Test\n6 = Last Order dekho\n7 = Unlock Symbols\n8 = API Cap set')||'').trim();
+            const c = (prompt('🛠️ TOOLS — number daalo:\n\n1 = Refresh All\n2 = Manual Trade Add\n3 = Full Backup (download)\n4 = Restore (upload file)\n5 = Bridge Test\n6 = Last Order dekho\n7 = Unlock Symbols\n8 = API Cap set\n\n— NAYE —\n9  = Telegram Test\n10 = Telegram Auto ON/OFF\n11 = ☁️ Cloud Backup ABHI\n12 = ☁️ Cloud se LAAO\n13 = ☁️ Cloud Info\n14 = ☁️ Auto Cloud ON/OFF')||'').trim();
             if(c==='1') refreshAll();
             else if(c==='2') manualTradeAdd();
             else if(c==='3') exportAll();
@@ -1056,6 +1056,16 @@
             else if(c==='6') lastOrderView();
             else if(c==='7') unlockSymbols();
             else if(c==='8'){ const v=prompt('Daily API cap:', apiBudgetCap()); if(v){ localStorage.setItem('td_cap', parseInt(v)||800); updateBudgetBar(); miniToast('Cap set: '+(parseInt(v)||800), true); } }
+            else if(c==='9') tgTest();
+            else if(c==='10'){
+                const on = (localStorage.getItem('tg_auto') || '1') === '1';
+                localStorage.setItem('tg_auto', on ? '0' : '1');
+                alert('📨 Telegram auto alert ab ' + (on ? 'BAND' : 'CHALU') + ' hai.\n\nChalu hone pe: har naya signal, trade open, trade close aur MT5 order Telegram pe jayega.');
+            }
+            else if(c==='11') cloudPush();
+            else if(c==='12') cloudPull();
+            else if(c==='13') cloudInfo();
+            else if(c==='14') cloudToggle();
         }
 
         async function fetchLiveAnalysis(pair, apiKey, interval, livePrice) {
@@ -1074,10 +1084,11 @@
             const ema200 = parseFloat(emaData.values?.[0]?.ema || 0) || null;
 
             // Trend start (Supertrend flip) - market-based signal age [+1 API call]
-            let trendStart = null;
+            let trendStart = null, bars = null;
             try {
                 const tsData = await tdFetch('time_series', symbol, apiKey, interval, '&outputsize=200&timezone=UTC');
                 trendStart = computeTrendStart(tsData);
+                try { bars = window.FDX ? window.FDX.toBars(tsData) : null; } catch(e2) { bars = null; }
             } catch(e) {}
             const rsi = parseFloat(rsiData.values?.[0]?.rsi || 50);
             const rsiSignal = rsi > 70 ? 'OVERBOUGHT' : rsi < 30 ? 'OVERSOLD' : 'NEUTRAL';
@@ -1116,6 +1127,7 @@
                 rawAtr: atr,
                 ema200,
                 trendStart,
+                bars,
                 decimals: decimals,
                 riskScore,
                 confidence,
@@ -1281,18 +1293,34 @@
 
         function openSettings() {
             const existing = localStorage.getItem('td_api_key') || '';
-            const key = prompt('1/2 — TwelveData API Key:', existing);
+            const key = prompt('1/6 — TwelveData API Key:', existing);
             if (key !== null && key.trim() !== '') {
                 localStorage.setItem('td_api_key', key.trim());
             }
 
             const existingFB = localStorage.getItem('fb_url') || '';
-            const fb = prompt('2/2 — Firebase URL (MT5 bridge ke liye, khali chhod sakte ho):\n\nExample:\nhttps://myapp-default-rtdb.firebaseio.com', existingFB);
+            const fb = prompt('2/6 — Firebase URL (MT5 bridge + cloud backup):\n\nExample:\nhttps://myapp-default-rtdb.firebaseio.com', existingFB);
             if (fb !== null) {
                 localStorage.setItem('fb_url', fb.trim().replace(/\/$/, ''));
             }
 
-            alert('✅ Settings saved!');
+            const tk = prompt('3/6 — Telegram Bot Token (@BotFather se):\n\nKhali chhodo to Telegram band rahega.', localStorage.getItem('tg_token') || '');
+            if (tk !== null) localStorage.setItem('tg_token', tk.trim());
+
+            const cid = prompt('4/6 — Telegram Chat ID (@userinfobot se):', localStorage.getItem('tg_chatid') || '');
+            if (cid !== null) localStorage.setItem('tg_chatid', cid.trim());
+
+            const bal = prompt('5/6 — Account Balance ($) — risk % nikalne ke liye:\n\n0 daalo to fixed Risk $ use hoga.', localStorage.getItem('acct_balance') || '0');
+            if (bal !== null) localStorage.setItem('acct_balance', String(parseFloat(bal) || 0));
+
+            const pct = prompt('6/6 — Risk per trade (%) — normally 1 ya 2:', localStorage.getItem('risk_pct') || '1');
+            if (pct !== null) localStorage.setItem('risk_pct', String(parseFloat(pct) || 1));
+
+            const r = (window.riskDollars ? window.riskDollars() : 0);
+            alert('✅ Settings saved!\n\n' +
+                  'Telegram : ' + (localStorage.getItem('tg_token') && localStorage.getItem('tg_chatid') ? 'ON' : 'OFF') + '\n' +
+                  'Risk/trade: ' + (r > 0 ? '$' + r : 'set nahi') + '\n\n' +
+                  'Test karne ke liye 🛠️ Tools > 9 dabao.');
         }
 
         // ===== MT5 Bridge via Firebase Realtime DB =====
@@ -1379,6 +1407,7 @@
                 });
                 if (!res.ok) throw new Error('HTTP ' + res.status);
                 await res.json();
+                try { if (window.tgMT5Alert) window.tgMT5Alert(order); } catch(e) {}
                 alert('✅ Order cloud pe bhej diya!\nVPS ka EA ~10 sec me place karega.\n\nID: ' + orderId);
                 return true;
             } catch (e) {
@@ -1652,7 +1681,9 @@
             // Signal quality score
             const q = computeQuality(analysis, confluence);
             window.lastQuality = q;
-            const agentsHTML = buildAgentsHTML(computeAgentVotes(analysis, confluence, q));
+            let agentsHTML = null;
+            try { agentsHTML = window.agents50HTML ? window.agents50HTML(analysis, confluence) : null; } catch(e) {}
+            if (!agentsHTML) agentsHTML = buildAgentsHTML(computeAgentVotes(analysis, confluence, q));
             const qualityHTML = analysis.signal === 'HOLD' ? '' : `
                 <div style="background:${q.color}15; border:1px solid ${q.color}66; border-radius:10px; padding:12px 14px; margin-bottom:14px;">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
@@ -1773,6 +1804,14 @@
                         <input type="number" step="0.01" min="0.01" id="editLots" value="${pair === 'ETHUSD' ? '0.10' : '0.01'}" oninput="updateDollarValues()" style="width:110px; padding:6px 8px; background:rgba(255,255,255,0.06); border:1px solid #333; color:#e0e0e0; border-radius:6px; font-size:13px; font-weight:600; text-align:right; font-family:inherit;">
                     </div>
                     <div class="analysis-row">
+                        <span class="analysis-label">🛡️ Risk $ ✏️<br><span style="font-size:9px; color:#979797;">ek trade me max loss</span></span>
+                        <div style="display:flex; gap:5px; align-items:center;">
+                            <input type="number" step="0.5" min="0.5" id="editRisk" value="${(window.riskDollars && window.riskDollars() > 0) ? window.riskDollars() : 5}" style="width:64px; padding:6px 8px; background:rgba(255,255,255,0.06); border:1px solid #333; color:#e0e0e0; border-radius:6px; font-size:13px; font-weight:600; text-align:right; font-family:inherit;">
+                            <button onclick="autoLot()" style="padding:6px 9px; font-size:10px; font-weight:800; background:rgba(0,255,150,.12); color:#00FF96; border:1px solid rgba(0,255,150,.45); border-radius:6px; font-family:inherit;">⚖️ AUTO<br>LOT</button>
+                        </div>
+                    </div>
+                    <div id="riskNote" style="font-size:10px; color:#979797; text-align:center; margin:2px 0 6px; line-height:1.6;"></div>
+                    <div class="analysis-row">
                         <span class="analysis-label">📐 Contract Size ✏️<br><span style="font-size:9px; color:#979797;">MT5 se auto · ya daalo</span></span>
                         <input type="number" step="any" min="0" id="editContract" value="${contractDefault(pair)}" oninput="saveContract(); updateDollarValues();" style="width:110px; padding:6px 8px; background:rgba(255,255,255,0.06); border:1px solid #333; color:#e0e0e0; border-radius:6px; font-size:13px; font-weight:600; text-align:right; font-family:inherit;">
                     </div>
@@ -1820,6 +1859,7 @@
             window.lastAnalysis = { pair, ...analysis };
             highlightModeButtons();
             updateDollarValues();
+            try { if (!fromCache && window.tgSignalAlert) window.tgSignalAlert(window.lastAnalysis, confluence); } catch(e) {}
         }
 
         // Entry mode toggle - MARKET vs LIMIT
@@ -1997,6 +2037,7 @@
                 timestamp: new Date().toISOString(),
                 ...window.lastAnalysis
             };
+            delete data.bars;   // 200 candles localStorage me mat bharo
             
             const saved = JSON.parse(localStorage.getItem('forexDiagnosis') || '[]');
             saved.unshift(data);
@@ -2095,6 +2136,8 @@
             trades.unshift(trade);
             trades.splice(100); // keep last 100
             saveTrades(trades);
+            try { if (window.tgTradeAlert) window.tgTradeAlert(trade, 'OPEN'); } catch(e) {}
+            try { if (window.cloudTouch) window.cloudTouch(); } catch(e) {}
             alert('✅ Trade record ho gaya!\nEntry: ' + entry + '\nSL: ' + sl + '\nTP: ' + tp + '\n\nDashboard pe "My Trades" me dikhega.');
             closeAnalysisPanel();
             renderTrades();
@@ -2261,6 +2304,8 @@
             t.closeTime = new Date().toISOString();
             if (window.livePL) delete window.livePL[id];
             saveTrades(trades);
+            try { if (window.tgTradeAlert) window.tgTradeAlert(t, 'CLOSE'); } catch(e) {}
+            try { if (window.cloudTouch) window.cloudTouch(); } catch(e) {}
             renderTrades();
         }
 
@@ -2868,5 +2913,562 @@
             });
         }
     </script>
+<!-- ============================================================
+     FD+ PACK  ·  4 NAYE FEATURE
+     1) 50 Independent Strategy Agents  (0 extra API call)
+     2) Telegram Alerts
+     3) Firebase Cloud Backup / Restore
+     4) Risk-based Auto Lot Sizing
+     ============================================================ -->
+<script>
+(function(){
+'use strict';
+
+/* ===================================================================
+   0. HELPERS
+   =================================================================== */
+const $id = i => document.getElementById(i);
+const toast = (m, ok) => { try { miniToast(m, ok !== false); } catch(e){ console.log(m); } };
+const LSg = (k, d) => { const v = localStorage.getItem(k); return v === null ? d : v; };
+
+function deviceId(){
+  let d = localStorage.getItem('fd_device_id');
+  if(!d){
+    d = 'FD' + Math.abs([...(navigator.userAgent + screen.width + screen.height + (new Date()).getTimezoneOffset())]
+        .reduce((h,c)=>((h<<5)-h+c.charCodeAt(0))|0, 7)).toString(36).toUpperCase()
+        + Date.now().toString(36).slice(-4).toUpperCase();
+    localStorage.setItem('fd_device_id', d);
+  }
+  return d;
+}
+
+/* ===================================================================
+   1.  50 INDEPENDENT STRATEGY AGENTS
+   Ye SamuSignal wala engine hai. Har agent apna indicator khud
+   candles se nikalta hai — isliye votes sach me independent hain.
+   Candles wahi hain jo trendStart ke liye pehle se aa rahi hain,
+   to EXTRA API CALL = 0.
+   =================================================================== */
+const B='BUY', SE='SELL', H='HOLD';
+const last = a => a[a.length-1];
+const sma  = (a,n) => a.map((_,i) => i<n-1 ? a[i] : a.slice(i-n+1,i+1).reduce((x,y)=>x+y,0)/n);
+const hh   = (b,n) => Math.max(...b.slice(-n).map(x=>x.h));
+const ll   = (b,n) => Math.min(...b.slice(-n).map(x=>x.l));
+
+function ema(arr,len){ const k=2/(len+1); const o=[]; let e=arr[0];
+  for(let i=0;i<arr.length;i++){ e = i===0?arr[0]:arr[i]*k+e*(1-k); o.push(e) } return o }
+
+function rsiC(c,len){
+  const out=new Array(c.length).fill(50); let g=0,l=0;
+  for(let i=1;i<=len&&i<c.length;i++){ const d=c[i]-c[i-1]; d>=0?g+=d:l-=d }
+  g/=len; l/=len; out[len]= l===0?100:100-100/(1+g/l);
+  for(let i=len+1;i<c.length;i++){ const d=c[i]-c[i-1];
+    g=(g*(len-1)+(d>0?d:0))/len; l=(l*(len-1)+(d<0?-d:0))/len;
+    out[i]= l===0?100:100-100/(1+g/l) }
+  return out;
+}
+function atrC(b,len){
+  const tr=[];
+  for(let i=0;i<b.length;i++) tr.push(i===0?b[i].h-b[i].l:
+    Math.max(b[i].h-b[i].l, Math.abs(b[i].h-b[i-1].c), Math.abs(b[i].l-b[i-1].c)));
+  const o=[]; let a=tr.slice(0,len).reduce((x,y)=>x+y,0)/len;
+  for(let i=0;i<tr.length;i++){ if(i<len) o.push(a); else { a=(a*(len-1)+tr[i])/len; o.push(a) } }
+  return o;
+}
+function stC(b,len,mult){
+  const a=atrC(b,len); const dir=[],line=[]; let up=0,dn=0,d=1;
+  for(let i=0;i<b.length;i++){
+    const mid=(b[i].h+b[i].l)/2;
+    let bu=mid-mult*a[i], bl=mid+mult*a[i];
+    if(i>0){
+      bu=(bu>up||b[i-1].c<up)?bu:up;
+      bl=(bl<dn||b[i-1].c>dn)?bl:dn;
+      d=(d===1&&b[i].c<up)?-1:(d===-1&&b[i].c>dn)?1:d;
+    } else d = b[i].c>=mid?1:-1;
+    up=bu; dn=bl; dir.push(d); line.push(d===1?up:dn);
+  }
+  return {dir,line,atr:a};
+}
+function macdH(c){ const f=ema(c,12),s=ema(c,26);
+  const m=c.map((_,i)=>f[i]-s[i]); const sig=ema(m,9); return m.map((v,i)=>v-sig[i]) }
+function stdev(a,n){ const s=a.slice(-n),m=s.reduce((x,y)=>x+y,0)/n;
+  return Math.sqrt(s.reduce((x,y)=>x+(y-m)*(y-m),0)/n) }
+function stoch(b,n){ const h=hh(b,n),l=ll(b,n),c=last(b).c; return h===l?50:(c-l)/(h-l)*100 }
+function cci(b,n){ const tp=b.map(x=>(x.h+x.l+x.c)/3);
+  const m=tp.slice(-n).reduce((x,y)=>x+y,0)/n;
+  const md=tp.slice(-n).reduce((x,y)=>x+Math.abs(y-m),0)/n;
+  return md===0?0:(last(tp)-m)/(0.015*md) }
+function adx(b,n){
+  let pdm=0,ndm=0,tr=0;
+  for(let i=Math.max(1,b.length-n);i<b.length;i++){
+    const up=b[i].h-b[i-1].h, dn=b[i-1].l-b[i].l;
+    if(up>dn&&up>0) pdm+=up;
+    if(dn>up&&dn>0) ndm+=dn;
+    tr+=Math.max(b[i].h-b[i].l, Math.abs(b[i].h-b[i-1].c), Math.abs(b[i].l-b[i-1].c));
+  }
+  if(!tr) return {adx:0,pdi:0,ndi:0};
+  const pdi=pdm/tr*100, ndi=ndm/tr*100;
+  const dx=(pdi+ndi)===0?0:Math.abs(pdi-ndi)/(pdi+ndi)*100;
+  return {adx:dx,pdi,ndi};
+}
+function psarUp(b){ const c=b.map(x=>x.c); return last(ema(c,5))>last(ema(c,13)) }
+
+const AGENTS = [
+ /* --- TREND (1-14) --- */
+ {n:'EMA 9/21 Cross',      g:'Trend', f:d=>{const a=last(ema(d.c,9)),b=last(ema(d.c,21)); return a>b*1.0002?B:a<b*0.9998?SE:H}},
+ {n:'EMA 20/50 Cross',     g:'Trend', f:d=>{const a=last(ema(d.c,20)),b=last(ema(d.c,50)); return a>b?B:a<b?SE:H}},
+ {n:'EMA 50/200 Cross',    g:'Trend', f:d=>{const a=last(ema(d.c,50)),b=last(ema(d.c,Math.min(200,d.c.length-1))); return a>b?B:a<b?SE:H}},
+ {n:'SMA 10/30 Cross',     g:'Trend', f:d=>{const a=last(sma(d.c,10)),b=last(sma(d.c,30)); return a>b?B:a<b?SE:H}},
+ {n:'Price vs EMA 50',     g:'Trend', f:d=>{const e=last(ema(d.c,50)); return d.p>e*1.0005?B:d.p<e*0.9995?SE:H}},
+ {n:'Price vs EMA 200',    g:'Trend', f:d=>{const e=last(ema(d.c,Math.min(200,d.c.length-1))); return d.p>e?B:d.p<e?SE:H}},
+ {n:'Supertrend 10/3',     g:'Trend', f:d=>d.st===1?B:SE},
+ {n:'Supertrend 7/2',      g:'Trend', f:d=>last(stC(d.b,7,2).dir)===1?B:SE},
+ {n:'Supertrend 14/4',     g:'Trend', f:d=>last(stC(d.b,14,4).dir)===1?B:SE},
+ {n:'MACD Histogram',      g:'Trend', f:d=>{const h=last(macdH(d.c)); return h>0?B:h<0?SE:H}},
+ {n:'MACD Momentum',       g:'Trend', f:d=>{const h=macdH(d.c); return last(h)>h[h.length-2]?B:SE}},
+ {n:'ADX Direction',       g:'Trend', f:d=>{const a=adx(d.b,14); if(a.adx<20)return H; return a.pdi>a.ndi?B:SE}},
+ {n:'ADX Strength',        g:'Trend', f:d=>{const a=adx(d.b,14); if(a.adx<25)return H; return a.pdi>a.ndi?B:SE}},
+ {n:'PSAR Proxy',          g:'Trend', f:d=>psarUp(d.b)?B:SE},
+
+ /* --- MOMENTUM (15-26) --- */
+ {n:'RSI 14 Zones',        g:'Momentum', f:d=>d.r>55?B:d.r<45?SE:H},
+ {n:'RSI Overbought/sold', g:'Momentum', f:d=>d.r<30?B:d.r>70?SE:H},
+ {n:'RSI 7 Fast',          g:'Momentum', f:d=>{const r=last(rsiC(d.c,7)); return r>60?B:r<40?SE:H}},
+ {n:'RSI 21 Slow',         g:'Momentum', f:d=>{const r=last(rsiC(d.c,21)); return r>52?B:r<48?SE:H}},
+ {n:'RSI Divergence',      g:'Momentum', f:d=>{const r=rsiC(d.c,14),n=d.c.length-1;
+    const pUp=d.c[n]>d.c[n-5], rUp=r[n]>r[n-5]; return pUp&&!rUp?SE:!pUp&&rUp?B:H}},
+ {n:'Stochastic 14',       g:'Momentum', f:d=>{const k=stoch(d.b,14); return k<20?B:k>80?SE:H}},
+ {n:'Stochastic 5 Fast',   g:'Momentum', f:d=>{const k=stoch(d.b,5); return k>60?B:k<40?SE:H}},
+ {n:'CCI 20',              g:'Momentum', f:d=>{const c=cci(d.b,20); return c>100?B:c<-100?SE:H}},
+ {n:'CCI Zero Cross',      g:'Momentum', f:d=>{const c=cci(d.b,20); return c>0?B:SE}},
+ {n:'Williams %R',         g:'Momentum', f:d=>{const h=hh(d.b,14),l=ll(d.b,14);
+    const w=h===l?-50:(h-d.p)/(h-l)*-100; return w<-80?B:w>-20?SE:H}},
+ {n:'ROC 10',              g:'Momentum', f:d=>{const n=d.c.length-1,r=(d.c[n]-d.c[n-10])/d.c[n-10]*100;
+    return r>0.15?B:r<-0.15?SE:H}},
+ {n:'Momentum 20',         g:'Momentum', f:d=>{const n=d.c.length-1; return d.c[n]>d.c[n-20]?B:SE}},
+
+ /* --- VOLATILITY / CHANNEL (27-36) --- */
+ {n:'Bollinger 20/2',      g:'Volatility', f:d=>{const m=last(sma(d.c,20)),sd=stdev(d.c,20);
+    return d.p<m-2*sd?B:d.p>m+2*sd?SE:H}},
+ {n:'Bollinger Mid',       g:'Volatility', f:d=>{const m=last(sma(d.c,20)); return d.p>m?B:SE}},
+ {n:'BB Squeeze Break',    g:'Volatility', f:d=>{const sd=stdev(d.c,20),m=last(sma(d.c,20));
+    if(sd/m<0.0015) return H; return d.p>m?B:SE}},
+ {n:'Keltner Channel',     g:'Volatility', f:d=>{const m=last(ema(d.c,20));
+    return d.p>m+1.5*d.a?B:d.p<m-1.5*d.a?SE:H}},
+ {n:'Donchian 20',         g:'Volatility', f:d=>{const h=hh(d.b,20),l=ll(d.b,20);
+    return d.p>=h*0.999?B:d.p<=l*1.001?SE:H}},
+ {n:'Donchian 55',         g:'Volatility', f:d=>{const n=Math.min(55,d.b.length);
+    const h=hh(d.b,n),l=ll(d.b,n); return d.p>=h*0.999?B:d.p<=l*1.001?SE:H}},
+ {n:'ATR Expansion',       g:'Volatility', f:d=>{const t=atrC(d.b,14),n=t.length-1;
+    if(t[n]<t[n-5]) return H; return d.p>d.c[d.c.length-2]?B:SE}},
+ {n:'Range Position',      g:'Volatility', f:d=>{const h=hh(d.b,30),l=ll(d.b,30);
+    const pos=h===l?.5:(d.p-l)/(h-l); return pos<0.25?B:pos>0.75?SE:H}},
+ {n:'Volatility Filter',   g:'Volatility', f:d=>{const pct=d.a/d.p*100;
+    if(pct<0.03||pct>2) return H; return d.p>last(ema(d.c,20))?B:SE}},
+ {n:'Std Dev Break',       g:'Volatility', f:d=>{const sd=stdev(d.c,20),m=last(sma(d.c,20));
+    return d.p>m+sd?B:d.p<m-sd?SE:H}},
+
+ /* --- PRICE ACTION (37-46) --- */
+ {n:'Higher Highs/Lows',   g:'Price Action', f:d=>{const b=d.b,n=b.length-1;
+    const hi=b[n].h>b[n-2].h, lo=b[n].l>b[n-2].l; return hi&&lo?B:!hi&&!lo?SE:H}},
+ {n:'Engulfing Candle',    g:'Price Action', f:d=>{const b=d.b,n=b.length-1,a=b[n],pv=b[n-1];
+    if(a.c>a.o&&pv.c<pv.o&&a.c>pv.o&&a.o<pv.c) return B;
+    if(a.c<a.o&&pv.c>pv.o&&a.c<pv.o&&a.o>pv.c) return SE; return H}},
+ {n:'Pin Bar',             g:'Price Action', f:d=>{const a=last(d.b),rg=a.h-a.l; if(!rg) return H;
+    const lw=Math.min(a.o,a.c)-a.l, uw=a.h-Math.max(a.o,a.c);
+    return lw/rg>0.55?B:uw/rg>0.55?SE:H}},
+ {n:'Inside Bar Break',    g:'Price Action', f:d=>{const b=d.b,n=b.length-1;
+    if(b[n-1].h<b[n-2].h&&b[n-1].l>b[n-2].l) return b[n].c>b[n-1].h?B:b[n].c<b[n-1].l?SE:H; return H}},
+ {n:'3 Candle Trend',      g:'Price Action', f:d=>{const b=d.b,n=b.length-1;
+    const up=[0,1,2].every(i=>b[n-i].c>b[n-i].o), dn=[0,1,2].every(i=>b[n-i].c<b[n-i].o);
+    return up?B:dn?SE:H}},
+ {n:'Body Strength',       g:'Price Action', f:d=>{const a=last(d.b),rg=a.h-a.l; if(!rg) return H;
+    const bd=(a.c-a.o)/rg; return bd>0.5?B:bd<-0.5?SE:H}},
+ {n:'Gap Direction',       g:'Price Action', f:d=>{const b=d.b,n=b.length-1;
+    return b[n].o>b[n-1].c*1.0003?B:b[n].o<b[n-1].c*0.9997?SE:H}},
+ {n:'Close vs Open 5',     g:'Price Action', f:d=>{const b=d.b.slice(-5);
+    const up=b.filter(x=>x.c>x.o).length; return up>=4?B:up<=1?SE:H}},
+ {n:'Day High/Low Test',   g:'Price Action', f:d=>{const h=hh(d.b,24),l=ll(d.b,24),rg=h-l;
+    if(!rg) return H; return (d.p-l)/rg<0.2?B:(h-d.p)/rg<0.2?SE:H}},
+ {n:'Pivot Point',         g:'Price Action', f:d=>{const b=d.b[d.b.length-2];
+    const pp=(b.h+b.l+b.c)/3; return d.p>pp?B:SE}},
+
+ /* --- MULTI TIMEFRAME (47-50) --- */
+ {n:'15M Trend Bias',      g:'Higher TF', f:d=>d.htf['15 Minute']||H},
+ {n:'30M Trend Bias',      g:'Higher TF', f:d=>d.htf['30 Minute']||H},
+ {n:'1H Trend Bias',       g:'Higher TF', f:d=>d.htf['1 Hour']||H},
+ {n:'MTF Alignment',       g:'Higher TF', f:d=>{
+    const v=['5 Minute','15 Minute','30 Minute','1 Hour'].map(k=>d.htf[k]).filter(Boolean);
+    if(v.length<2) return H;
+    return v.every(x=>x===B)?B:v.every(x=>x===SE)?SE:H}}
+];
+
+/* TwelveData time_series -> OHLC bars (ASC) */
+function toBars(tsData){
+  const v = tsData && tsData.values;
+  if(!Array.isArray(v) || v.length < 60) return null;
+  const asc = v.slice().reverse();
+  const bars = asc.map(x => ({
+    o:+x.open, h:+x.high, l:+x.low, c:+x.close
+  })).filter(x => x.o && x.h && x.l && x.c);
+  return bars.length >= 60 ? bars : null;
+}
+
+function runAgents(bars, htfBias, price){
+  const c  = bars.map(x=>x.c);
+  const st = stC(bars,10,3);
+  const d  = { b:bars, c, p:price||last(c), r:last(rsiC(c,14)),
+               a:last(st.atr), st:last(st.dir), htf:htfBias||{} };
+  const out = AGENTS.map(ag => {
+    let v = H;
+    try { v = ag.f(d) || H } catch(e){ v = H }
+    return {name:ag.n, cat:ag.g, vote:v};
+  });
+  const buy  = out.filter(x=>x.vote===B).length;
+  const sell = out.filter(x=>x.vote===SE).length;
+  const hold = out.filter(x=>x.vote===H).length;
+  const verdict = buy>sell ? B : sell>buy ? SE : H;
+  const conf = Math.round(Math.max(buy,sell) / AGENTS.length * 100);
+  const by = {};
+  out.forEach(x => { by[x.cat] = by[x.cat] || {b:0,s:0,h:0};
+    by[x.cat][x.vote===B?'b':x.vote===SE?'s':'h']++ });
+  return {list:out, buy, sell, hold, total:AGENTS.length, verdict, conf, by};
+}
+
+function build50HTML(v, signal){
+  const bp = Math.round(v.buy/v.total*100), sp = Math.round(v.sell/v.total*100);
+  const hp = 100-bp-sp;
+  const vcol = v.verdict===B?'#00FF96':v.verdict===SE?'#FF5B5B':'#FFB800';
+  const rows = v.list.map(a=>{
+    const col = a.vote===B?'#00FF96':a.vote===SE?'#FF5B5B':'#FFB800';
+    const bg  = a.vote===B?'rgba(0,255,150,.12)':a.vote===SE?'rgba(255,68,68,.12)':'rgba(255,184,0,.12)';
+    return `<div class="ag50Row" data-cat="${a.cat}" style="display:flex; justify-content:space-between; align-items:center; padding:6px 9px; border-radius:7px; background:#17161a; margin-bottom:4px;"><div style="font-size:11px; font-weight:700; color:#e8e2d5;">${a.name}<div style="font-size:8.5px; color:#8d8778; font-weight:500;">${a.cat}</div></div><span style="font-size:9px; font-weight:800; padding:2px 9px; border-radius:12px; background:${bg}; color:${col};">${a.vote}</span></div>`;
+  }).join('');
+  const cats = ['All','Trend','Momentum','Volatility','Price Action','Higher TF'];
+  const btns = cats.map((c,i)=>`<button onclick="filter50('${c}',this)" style="flex:0 0 auto; padding:5px 11px; font-size:10px; font-weight:700; border-radius:14px; background:#1c1b20; color:#D9B65E; border:1px solid rgba(217,182,94,.3); opacity:${i===0?'1':'0.45'};">${c}</button>`).join('');
+  const grpTxt = Object.entries(v.by).map(([g,z])=>`${g} ${z.b}B/${z.s}S`).join(' · ');
+  const clash = (signal && signal!=='HOLD' && v.verdict!==H && v.verdict!==signal)
+    ? `<div style="text-align:center; margin-top:8px; padding:7px; background:rgba(255,68,68,.15); border:1px solid rgba(255,68,68,.5); border-radius:8px; font-size:11px; color:#FF6B6B; font-weight:700;">⚠️ TAKRAAV — Agents ${v.verdict} bol rahe, signal ${signal} hai</div>`
+    : (v.conf>=60 && v.verdict===signal
+      ? '<div style="text-align:center; margin-top:8px; font-size:11px; color:#00FF96; font-weight:700;">✅ MAJBOOT SAHMATI</div>' : '');
+  return `<div style="background:#111013; border:1px solid rgba(217,182,94,.32); border-radius:12px; padding:14px; margin-bottom:14px;">
+    <div style="text-align:center; font-size:13px; font-weight:800; color:#D9B65E; letter-spacing:1px;">🤖 ${v.total} STRATEGY AGENTS · VOTE</div>
+    <div style="text-align:center; font-size:9px; color:#8d8778; margin-top:2px;">har agent apna indicator khud nikaalta hai · 0 extra API</div>
+    <div style="text-align:center; font-size:22px; font-weight:900; color:${vcol}; margin:6px 0 2px;">${v.verdict} · ${v.conf}%</div>
+    <div style="text-align:center; font-size:11px; color:#bab2a2; margin-bottom:10px;">${v.buy} BUY · ${v.sell} SELL · ${v.hold} HOLD</div>
+    <div style="display:flex; height:12px; border-radius:7px; overflow:hidden; margin-bottom:10px;"><div style="width:${bp}%; background:#00FF96;"></div><div style="width:${sp}%; background:#FF5B5B;"></div><div style="width:${hp}%; background:#FFB800;"></div></div>
+    <div style="font-size:9.5px; color:#8d8778; text-align:center; margin-bottom:8px;">${grpTxt}</div>
+    <div style="display:flex; gap:6px;">
+      <div style="flex:1; text-align:center; padding:8px; border-radius:8px; background:rgba(0,255,150,.1); border:1px solid rgba(0,255,150,.3);"><div style="font-size:20px; font-weight:900; color:#00FF96;">${v.buy}</div><div style="font-size:9px; color:#00FF96;">BUY</div></div>
+      <div style="flex:1; text-align:center; padding:8px; border-radius:8px; background:rgba(255,68,68,.1); border:1px solid rgba(255,68,68,.3);"><div style="font-size:20px; font-weight:900; color:#FF5B5B;">${v.sell}</div><div style="font-size:9px; color:#FF5B5B;">SELL</div></div>
+      <div style="flex:1; text-align:center; padding:8px; border-radius:8px; background:rgba(255,184,0,.08); border:1px solid rgba(255,184,0,.28);"><div style="font-size:20px; font-weight:900; color:#FFB800;">${v.hold}</div><div style="font-size:9px; color:#FFB800;">HOLD</div></div>
+    </div>
+    ${clash}
+    <details><summary style="font-size:11px; color:#D9B65E; font-weight:700; cursor:pointer; padding:8px 0 6px;">▸ Sabhi ${v.total} agents dekho</summary>
+      <div style="display:flex; gap:6px; overflow-x:auto; padding:8px 0 10px;">${btns}</div>
+      <div style="max-height:320px; overflow-y:auto;">${rows}</div>
+    </details>
+  </div>`;
+}
+
+window.filter50 = function(cat, btn){
+  document.querySelectorAll('.ag50Row').forEach(r=>{
+    r.style.display = (cat==='All' || r.dataset.cat===cat) ? 'flex' : 'none';
+  });
+  if(btn && btn.parentElement)
+    [...btn.parentElement.children].forEach(b=>b.style.opacity = b===btn?'1':'0.45');
+};
+
+/* PUBLIC: fetchLiveAnalysis / displayAnalysis inhe call karte hain */
+window.FDX = { toBars, runAgents, build50HTML, AGENTS };
+
+/* htf bias confluence array se */
+function htfFrom(confluence){
+  const o = {};
+  (confluence||[]).forEach(c=>{
+    if(!c) return;
+    o[c.label] = c.trend==='BULLISH'?B : c.trend==='BEARISH'?SE : H;
+  });
+  return o;
+}
+
+/* displayAnalysis me lagne wala entry point */
+window.agents50HTML = function(analysis, confluence){
+  try{
+    const bars = analysis && analysis.bars;
+    if(!bars || bars.length < 60) return null;
+    const v = runAgents(bars, htfFrom(confluence), analysis.rawPrice);
+    window.lastAgents50 = v;
+    return build50HTML(v, analysis.signal);
+  }catch(e){ console.warn('agents50 fail', e); return null }
+};
+
+/* ===================================================================
+   2.  TELEGRAM ALERTS
+   =================================================================== */
+const TG = {
+  tok: () => LSg('tg_token',''),
+  id:  () => LSg('tg_chatid',''),
+  auto:() => LSg('tg_auto','1') === '1'
+};
+
+async function tgSend(text, silent){
+  const tok = TG.tok(), cid = TG.id();
+  if(!tok || !cid){ if(!silent) toast('Pehle ⚙️ Settings me Telegram token + chat ID daalo', false); return false }
+  if(!text) return false;
+  try{
+    const r = await fetch(`https://api.telegram.org/bot${tok}/sendMessage`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({chat_id:cid, text, parse_mode:'HTML', disable_web_page_preview:true})
+    });
+    const j = await r.json();
+    if(j.ok){ if(!silent) toast('📨 Telegram pe chala gaya'); return true }
+    if(!silent) toast('Telegram error: ' + (j.description||''), false);
+    return false;
+  }catch(e){ if(!silent) toast('Telegram nahi gaya — internet check karo', false); return false }
+}
+
+window.tgTest = function(){
+  if(!TG.tok() || !TG.id()) return alert('Pehle ⚙️ API Settings me Telegram Bot Token aur Chat ID daalo.');
+  tgSend(`🤖 <b>ForexDiagnosis</b> connected!\n\nAb yahan signal aur trade alerts aayenge.\n📱 ${deviceId()}\n⏰ ${new Date().toLocaleString('en-IN')}`);
+};
+window.tgSendRaw = tgSend;
+
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') }
+
+/* signal alert — dedupe so ek hi signal baar baar na jaye */
+window.tgSignalAlert = function(a, confluence){
+  if(!TG.auto() || !a || a.signal === 'HOLD') return;
+  const v = window.lastAgents50;
+  const key = `${a.pair}|${a.signal}|${a.trendStart||''}|${a.entryZone}`;
+  if(localStorage.getItem('tg_last_sig') === key) return;
+  localStorage.setItem('tg_last_sig', key);
+  const q = window.lastQuality;
+  const emo = a.signal === 'BUY' ? '🟢' : '🔴';
+  const txt =
+`${emo} <b>${esc(a.signal)} ${esc(a.pair)}</b>  <i>${esc(a.orderType||'')}</i>
+
+📍 Entry : <b>${esc(a.entryZone)}</b>
+🛑 SL    : ${esc(a.slZone)}
+🎯 TP    : ${esc(a.tpZone)}
+⚖️ RRR   : 1:${esc(a.rrr)}
+
+📊 Price ${esc(a.currentPrice)} · RSI ${Math.round(a.rsi)} · ST ${esc(a.supertrend)}` +
+(q ? `\n🏅 Quality: <b>${esc(q.grade)}</b> ${q.score}/100` : '') +
+(v ? `\n🤖 Agents: ${v.buy}B / ${v.sell}S / ${v.hold}H → <b>${v.verdict} ${v.conf}%</b>` : '') +
+`\n\n⏰ ${new Date().toLocaleString('en-IN')}`;
+  tgSend(txt, true);
+};
+
+window.tgTradeAlert = function(t, what){
+  if(!TG.auto() || !t) return;
+  let txt;
+  if(what === 'OPEN'){
+    txt = `✅ <b>TRADE LIYA</b> — ${esc(t.pair)} ${esc(t.signal)}\n\n` +
+      `💼 ${esc(t.lots)} lot · ${esc(t.orderType||'')}\n` +
+      `📍 ${esc(t.entry)}  🛑 ${esc(t.sl)}  🎯 ${esc(t.tp)}\n` +
+      (t.quality ? `🏅 ${esc(t.quality)}\n` : '') +
+      `⏰ ${new Date().toLocaleString('en-IN')}`;
+  } else {
+    const win = (t.pl||0) >= 0;
+    txt = `${win?'🎉':'💔'} <b>TRADE CLOSE</b> — ${esc(t.pair)} ${esc(t.signal)}\n\n` +
+      `${win?'Profit':'Loss'}: <b>${(t.pl>=0?'+$':'-$') + Math.abs(t.pl).toFixed(2)}</b>\n` +
+      `${esc(t.result||'')} · ${esc(t.lots)} lot\n` +
+      `📍 ${esc(t.entry)} → exit\n` +
+      `⏰ ${new Date().toLocaleString('en-IN')}`;
+  }
+  tgSend(txt, true);
+};
+
+window.tgMT5Alert = function(payload){
+  if(!TG.auto() || !payload) return;
+  tgSend(`🚀 <b>MT5 pe order bheja</b>\n\n${esc(payload.symbol||payload.sym||'')} ${esc(payload.action||payload.type||'')}\n` +
+    `Lots ${esc(payload.lots||payload.volume||'')} · Entry ${esc(payload.price||payload.entry||'')}\n` +
+    `SL ${esc(payload.sl)} · TP ${esc(payload.tp)}\n⏰ ${new Date().toLocaleString('en-IN')}`, true);
+};
+
+/* ===================================================================
+   3.  FIREBASE CLOUD BACKUP
+   =================================================================== */
+let cloudBusy = false, pushTimer = null;
+
+function cloudUrl(){
+  let u = (localStorage.getItem('fb_url')||'').trim().replace(/\/+$/,'');
+  if(!u) return '';
+  if(!/^https?:\/\//.test(u)) u = 'https://' + u;
+  return u + '/forexdiagnosis/backup/' + deviceId() + '.json';
+}
+
+/* Firebase keys me '/' '.' '$' '#' '[' ']' allowed nahi —
+   isliye poora localStorage ek JSON string me daal dete hain */
+function snapshot(){
+  const d = {};
+  for(let i=0;i<localStorage.length;i++){
+    const k = localStorage.key(i);
+    if(k === 'fd_device_id') continue;
+    d[k] = localStorage.getItem(k);
+  }
+  return { app:'ForexDiagnosis', at:Date.now(), device:deviceId(), json:JSON.stringify(d) };
+}
+
+window.cloudPush = async function(silent){
+  const url = cloudUrl();
+  if(!url){ if(!silent) alert('Pehle ⚙️ API Settings me Firebase URL daalo'); return false }
+  if(cloudBusy) return false;
+  cloudBusy = true;
+  try{
+    const r = await fetch(url, {method:'PUT', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(snapshot())});
+    if(!r.ok){
+      let why = 'HTTP ' + r.status;
+      if(r.status===401 || r.status===403) why = 'Firebase rules ne mana kiya — write permission do';
+      throw new Error(why);
+    }
+    localStorage.setItem('cloud_at', String(Date.now()));
+    if(!silent) toast('☁️ Cloud pe backup ho gaya');
+    cloudBusy = false; return true;
+  }catch(e){
+    if(!silent) alert('❌ Cloud backup fail — ' + e.message);
+    cloudBusy = false; return false;
+  }
+};
+
+window.cloudPull = async function(silent){
+  const url = cloudUrl();
+  if(!url){ if(!silent) alert('Pehle Firebase URL daalo'); return false }
+  try{
+    const r = await fetch(url, {cache:'no-store'});
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    if(!d || !d.json){ if(!silent) alert('Cloud pe koi backup nahi mila'); return false }
+    const data = JSON.parse(d.json);
+    const nTrades = (()=>{ try{ return JSON.parse(data.myTrades||'[]').length }catch(e){ return 0 } })();
+    const mine    = (()=>{ try{ return JSON.parse(localStorage.getItem('myTrades')||'[]').length }catch(e){ return 0 } })();
+    if(!silent){
+      const q = `☁️ Cloud backup ${new Date(d.at).toLocaleString('en-IN')} ka hai.\n\n` +
+        `Usme ${nTrades} trades hain. Abhi phone me ${mine} hain.\n\n` +
+        `Cloud wala data laga dein? (abhi ka data REPLACE ho jayega)`;
+      if(!confirm(q)) return false;
+    }
+    Object.keys(data).forEach(k => localStorage.setItem(k, data[k]));
+    alert('✅ Cloud se restore ho gaya — reload...');
+    setTimeout(()=>location.reload(), 900);
+    return true;
+  }catch(e){ if(!silent) alert('❌ Restore fail — ' + e.message); return false }
+};
+
+/* har data change ke baad 40s me auto push */
+window.cloudTouch = function(){
+  if(LSg('cloud_auto','1') !== '1' || !localStorage.getItem('fb_url')) return;
+  clearTimeout(pushTimer);
+  pushTimer = setTimeout(()=>window.cloudPush(true), 40000);
+};
+
+/* naya phone / data wipe -> auto restore offer */
+async function cloudAutoRestore(){
+  if(LSg('cloud_auto','1') !== '1' || !localStorage.getItem('fb_url')) return;
+  let mine = 0;
+  try{ mine = JSON.parse(localStorage.getItem('myTrades')||'[]').length }catch(e){}
+  if(mine > 0) return;
+  try{
+    const r = await fetch(cloudUrl(), {cache:'no-store'});
+    if(!r.ok) return;
+    const d = await r.json();
+    if(!d || !d.json) return;
+    const data = JSON.parse(d.json);
+    const n = (()=>{ try{ return JSON.parse(data.myTrades||'[]').length }catch(e){ return 0 } })();
+    if(!n) return;
+    if(confirm(`☁️ Cloud pe ${new Date(d.at).toLocaleString('en-IN')} ka backup mila — ${n} trades.\n\nWapas laga dein?`)){
+      Object.keys(data).forEach(k => localStorage.setItem(k, data[k]));
+      location.reload();
+    }
+  }catch(e){}
+}
+
+window.cloudInfo = function(){
+  const at = localStorage.getItem('cloud_at');
+  alert('☁️ CLOUD BACKUP\n\n' +
+    'Device ID : ' + deviceId() + '\n' +
+    'Firebase  : ' + (localStorage.getItem('fb_url') || '— set nahi —') + '\n' +
+    'Auto      : ' + (LSg('cloud_auto','1')==='1' ? 'ON' : 'OFF') + '\n' +
+    'Last push : ' + (at ? new Date(+at).toLocaleString('en-IN') : 'kabhi nahi') + '\n\n' +
+    'Har phone ka apna alag backup rehta hai.');
+};
+
+window.cloudToggle = function(){
+  const on = LSg('cloud_auto','1') === '1';
+  localStorage.setItem('cloud_auto', on ? '0' : '1');
+  alert('☁️ Auto cloud backup ab ' + (on ? 'BAND' : 'CHALU') + ' hai.');
+};
+
+/* ===================================================================
+   4.  RISK-BASED AUTO LOT SIZING
+   =================================================================== */
+
+/* 1 lot pe, price ke 1 unit move ka $ — MT5 spec mile to wahi, warna contract size */
+function usdPerUnit(pair, lots, refPrice){
+  let spec = null, cs = 0;
+  try{ spec = getSpec(pair) }catch(e){}
+  const csField = parseFloat(($id('editContract')||{}).value);
+  try{ cs = (csField > 0) ? csField : getContractSize(pair) }catch(e){ cs = csField > 0 ? csField : 100000 }
+  if(spec && spec.ts > 0 && spec.tv > 0) return (1/spec.ts) * spec.tv * lots;
+  if(String(pair).toUpperCase().endsWith('JPY') && refPrice > 0) return (cs * lots) / refPrice;
+  return cs * lots;
+}
+
+window.riskDollars = function(){
+  const bal = parseFloat(LSg('acct_balance','0')) || 0;
+  const pct = parseFloat(LSg('risk_pct','1')) || 1;
+  const fixed = parseFloat(LSg('risk_usd','0')) || 0;
+  if(fixed > 0) return fixed;
+  if(bal > 0) return +(bal * pct / 100).toFixed(2);
+  return 0;
+};
+
+window.autoLot = function(){
+  const a = window.lastAnalysis;
+  if(!a || a.signal === 'HOLD') return alert('Pehle koi BUY/SELL signal analyze karo');
+  const entry = parseFloat(($id('editEntry')||{}).value);
+  const sl    = parseFloat(($id('editSL')||{}).value);
+  const risk  = parseFloat(($id('editRisk')||{}).value);
+  if(isNaN(entry) || isNaN(sl)) return alert('Entry / SL sahi nahi hai');
+  if(isNaN(risk) || risk <= 0)  return alert('Risk $ daalo (jaise 5) — ya ⚙️ Settings me balance + risk % set karo');
+  const dist = Math.abs(entry - sl);
+  if(dist <= 0) return alert('SL entry ke barabar hai — SL badlo');
+
+  const perLot = usdPerUnit(a.pair, 1, entry);
+  if(!(perLot > 0)) return alert('Contract size pata nahi chala — Contract Size field me value daalo');
+
+  let lots = risk / (dist * perLot);
+  lots = Math.floor(lots * 100) / 100;          // 0.01 step, hamesha neeche
+  const tooSmall = lots < 0.01;
+  if(tooSmall) lots = 0.01;
+
+  const el = $id('editLots');
+  if(el){ el.value = lots.toFixed(2); try{ updateDollarValues() }catch(e){} }
+  localStorage.setItem('risk_usd', String(risk));
+
+  const actual = dist * usdPerUnit(a.pair, lots, entry);
+  const note = $id('riskNote');
+  if(note){
+    note.innerHTML = tooSmall
+      ? `⚠️ 0.01 lot pe bhi risk <b style="color:#FF6B6B;">$${actual.toFixed(2)}</b> hai — aapke $${risk} target se zyada. SL chhota karo ya skip karo.`
+      : `✅ <b>${lots.toFixed(2)} lot</b> · SL hit hua to loss <b style="color:#FF8888;">$${actual.toFixed(2)}</b> (target $${risk})`;
+    note.style.color = tooSmall ? '#FF6B6B' : '#9fd6a8';
+  }
+};
+
+/* ===================================================================
+   BOOT
+   =================================================================== */
+window.addEventListener('load', ()=>{
+  setTimeout(cloudAutoRestore, 1800);
+  const el = $id('fdxDevice');
+  if(el) el.textContent = deviceId();
+});
+
+})();
+</script>
+
 </body>
 </html>
